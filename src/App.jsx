@@ -1163,9 +1163,6 @@ function App() {
                   ? t('loading')
                   : t('load_demo_data')}
               </button>
-              <div className="bg-slate-50 px-3.5 py-2 rounded-xl text-sm font-semibold text-slate-700 flex items-center gap-2 border border-slate-200 capitalize">
-                <UserCircle size={18} className="text-slate-500"/> {(user.email || 'user').split('@')[0]}
-              </div>
            </div>
         </header>
 
