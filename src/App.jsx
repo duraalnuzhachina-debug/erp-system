@@ -1437,9 +1437,6 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
                 </motion.form>
               </div>
 
-              <div className="border-t border-slate-200/80 bg-slate-50/80 px-2.5 py-2.5 phone:px-3.5 md:px-5 flex items-center justify-center text-[10px] phone:text-[11px] text-slate-500">
-                <p className="font-semibold">{t('login_fast_secure')}</p>
-              </div>
             </div>
           </motion.div>
         </div>
