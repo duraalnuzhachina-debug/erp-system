@@ -15,7 +15,7 @@ import {
   PieChart, Award, ThumbsDown, Activity, FileText, Printer, X, CalendarDays, Download, Copy,
   Languages, LogOut, LogIn, User, UserCircle, Filter, SlidersHorizontal, Info, Zap, Target,
   TrendingUp as TrendUp, ShieldAlert, ChevronsLeft, ChevronsRight
-} from 'lucide-react';
+} from './lucideIcons';
 import { 
   LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Legend, LabelList,
