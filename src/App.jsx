@@ -105,6 +105,15 @@ const getRecordTimestamp = (record) => {
   return 0;
 };
 
+const getSafePurchaseTotal = (record) => {
+  const storedTotal = Number(record?.total);
+  if (Number.isFinite(storedTotal)) return storedTotal;
+
+  const price = cleanPriceValue(record?.price);
+  const qty = Number(record?.qty) || 1;
+  return price !== null ? price * qty : 0;
+};
+
 const getLocalizedDecisionLabel = (grade, ar) => {
   const base = getDecisionLabelByGrade(grade);
   if (!ar) return base;
@@ -1617,13 +1626,42 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .slice(0, 5);
   }, [filteredOps, itemAveragePrice, ar]);
 
+  const savingsByPurchaseId = useMemo(() => {
+    if (!sortedAll.length) return new Map();
+
+    const historyByCode = new Map();
+    const resolvedSavings = new Map();
+
+    [...sortedAll]
+      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .forEach((purchase) => {
+        const code = String(purchase.code || '').trim();
+        const price = cleanPriceValue(purchase.price);
+        const qty = Number(purchase.qty) || 1;
+
+        if (!purchase.id || !code || price === null) return;
+
+        const history = historyByCode.get(code) || [];
+        let savings = 0;
+
+        if (history.length >= 2) {
+          const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
+          if (baseline > price) savings = (baseline - price) * qty;
+        } else {
+          const impact = Number(purchase.impact);
+          if (Number.isFinite(impact) && impact < 0) savings = Math.abs(impact);
+        }
+
+        resolvedSavings.set(purchase.id, savings);
+        historyByCode.set(code, [...history, price].slice(-10));
+      });
+
+    return resolvedSavings;
+  }, [sortedAll]);
+
   const periodStats = useMemo(() => {
     const totalOps = filteredOps.length;
-    const totalSpend = filteredOps.reduce((s, p) => {
-      const price = cleanPriceValue(p.price);
-      const qty = Number(p.qty) || 1;
-      return s + (price !== null ? price * qty : 0);
-    }, 0);
+    const totalSpend = filteredOps.reduce((sum, purchase) => sum + getSafePurchaseTotal(purchase), 0);
     const gradeCount = { good: 0, ok: 0, bad: 0 };
     filteredOps.forEach((p) => {
       const g = p.grade || '';
@@ -1632,33 +1670,14 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       else if (g === 'B') gradeCount.ok++;
       else gradeCount.bad++;
     });
-    const byCodeHistory = {};
-    const totalSavings = [...filteredOps]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
-      .reduce((sum, p) => {
-        const price = cleanPriceValue(p.price);
-        const qty = Number(p.qty) || 1;
-        const code = String(p.code || '').trim();
-        if (!code || price === null) return sum;
-
-        const history = byCodeHistory[code] || [];
-        let savings = 0;
-
-        if (history.length >= 2) {
-          const baseline = history.reduce((acc, value) => acc + value, 0) / history.length;
-          if (baseline > price) savings = (baseline - price) * qty;
-        } else {
-          const impact = Number(p.impact);
-          if (Number.isFinite(impact) && impact < 0) savings = Math.abs(impact);
-        }
-
-        byCodeHistory[code] = [...history, price].slice(-10);
-        return sum + savings;
-      }, 0);
+    const totalSavings = filteredOps.reduce((sum, purchase) => {
+      if (!purchase?.id) return sum;
+      return sum + (savingsByPurchaseId.get(purchase.id) || 0);
+    }, 0);
 
     const averageInvoiceValue = totalOps > 0 ? totalSpend / totalOps : 0;
     return { totalOps, totalSpend, gradeCount, totalSavings, averageInvoiceValue };
-  }, [filteredOps]);
+  }, [filteredOps, savingsByPurchaseId]);
 
 
 
@@ -3803,11 +3822,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const byVendor = {};
     scopedByBranch.forEach(p => {
       if (!p.vendor) return;
-      const price = cleanPriceValue(p.price);
-      if (price === null) return;
-      const qty = Number(p.qty) || 1;
+      const total = getSafePurchaseTotal(p);
+      if (total <= 0) return;
       if (!byVendor[p.vendor]) byVendor[p.vendor] = { totalSpend: 0, count: 0 };
-      byVendor[p.vendor].totalSpend += price * qty;
+      byVendor[p.vendor].totalSpend += total;
       byVendor[p.vendor].count += 1;
     });
     return Object.entries(byVendor)
@@ -3857,11 +3875,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const byBranch = {};
     scopedByBranch.forEach(p => {
       if (!p.branch) return;
-      const price = cleanPriceValue(p.price);
-      if (price === null) return;
-      const qty = Number(p.qty) || 1;
+      const total = getSafePurchaseTotal(p);
+      if (total <= 0) return;
       if (!byBranch[p.branch]) byBranch[p.branch] = { totalSpend: 0, count: 0 };
-      byBranch[p.branch].totalSpend += price * qty;
+      byBranch[p.branch].totalSpend += total;
       byBranch[p.branch].count += 1;
     });
     return Object.entries(byBranch)
@@ -3942,7 +3959,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           ...p,
           price,
           qty,
-          totalSafe: Number.isFinite(Number(p.total)) ? Number(p.total) : price * qty,
+          totalSafe: getSafePurchaseTotal(p),
           ts,
         };
       })
