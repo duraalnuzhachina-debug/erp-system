@@ -412,31 +412,6 @@ function App() {
     }, duration);
   }, []);
 
-  useEffect(() => {
-    const handleOfflineReady = () => {
-      showMsg(
-        lang === 'ar' ? 'التطبيق جاهز للاستخدام دون اتصال' : 'App is ready for offline use',
-        'info'
-      );
-    };
-
-    const handlePwaUpdating = () => {
-      showMsg(
-        lang === 'ar' ? 'يتم الآن تحميل آخر تحديث للتطبيق' : 'Downloading the latest app update',
-        'info',
-        lang === 'ar' ? 'سيتم تحديث الصفحة تلقائيا إلى أحدث نسخة.' : 'The page will refresh automatically to the newest version.'
-      );
-    };
-
-    window.addEventListener('erp:pwa-offline-ready', handleOfflineReady);
-    window.addEventListener('erp:pwa-updating', handlePwaUpdating);
-
-    return () => {
-      window.removeEventListener('erp:pwa-offline-ready', handleOfflineReady);
-      window.removeEventListener('erp:pwa-updating', handlePwaUpdating);
-    };
-  }, [lang, showMsg]);
-
   const handleLogout = useCallback(async () => {
     try {
       await signOut(auth);
