@@ -1517,6 +1517,12 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     return Object.entries(byCode).map(([code, name]) => ({ value: code, label: `${name} (#${code})` }));
   }, [focusMode, timeScopedOps]);
 
+  const selectedFocusEntity = useMemo(() => {
+    if (focusMode === 'all' || !selectedValue) return ar ? 'كل البيانات ضمن الفلتر' : 'All records in this filter';
+    if (focusMode === 'supplier' || focusMode === 'branch') return selectedValue;
+    return focusOptions.find((opt) => opt.value === selectedValue)?.label || selectedValue;
+  }, [focusMode, ar, selectedValue, focusOptions]);
+
   const currentItemPrices = useMemo(() => {
     if (focusMode !== 'item' || !selectedValue) return [];
     return [...filteredOps]
@@ -1662,12 +1668,12 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   }, [focusMode, selectedValue, selectedFocusEntity, ar]);
 
   const savingsByPurchaseId = useMemo(() => {
-    if (!sortedAll.length) return new Map();
+    if (!sortedRecentAll.length) return new Map();
 
     const historyByCode = new Map();
     const resolvedSavings = new Map();
 
-    [...sortedAll]
+    [...sortedRecentAll]
       .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
       .forEach((purchase) => {
         const code = String(purchase.code || '').trim();
@@ -1692,7 +1698,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       });
 
     return resolvedSavings;
-  }, [sortedAll]);
+  }, [sortedRecentAll]);
 
   const periodStats = useMemo(() => {
     const totalOps = filteredOps.length;
@@ -2031,11 +2037,6 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   ];
   const activePeriodLabel = (ar ? periodOptions.find((opt) => opt.key === timeFilter)?.ar : periodOptions.find((opt) => opt.key === timeFilter)?.en) || timeFilter;
   const activeFocusLabel = (ar ? focusModeOptions.find((opt) => opt.key === focusMode)?.ar : focusModeOptions.find((opt) => opt.key === focusMode)?.en) || focusMode;
-  const selectedFocusEntity = useMemo(() => {
-    if (focusMode === 'all' || !selectedValue) return ar ? 'كل البيانات ضمن الفلتر' : 'All records in this filter';
-    if (focusMode === 'supplier' || focusMode === 'branch') return selectedValue;
-    return focusOptions.find((opt) => opt.value === selectedValue)?.label || selectedValue;
-  }, [focusMode, ar, selectedValue, focusOptions]);
   const dashboardKpis = [
     {
       key: 'spend',
