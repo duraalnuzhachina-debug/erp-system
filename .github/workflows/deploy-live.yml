@@ -20,6 +20,7 @@ jobs:
       VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
       VITE_COMPANY_LOGO: ${{ secrets.VITE_COMPANY_LOGO }}
+      VITE_ALLOWED_EMAILS: ${{ secrets.VITE_ALLOWED_EMAILS }}
 
     steps:
       - uses: actions/checkout@v5

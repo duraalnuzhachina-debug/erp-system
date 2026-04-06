@@ -51,6 +51,17 @@ const DASHBOARD_FILTERS_KEY = 'dashboard_filters_v1';
 const PURCHASES_DELETE_BACKUP_KEY = 'purchases_delete_backup_v1';
 const DESKTOP_SIDEBAR_COLLAPSED_KEY = 'desktop_sidebar_collapsed_v1';
 const isMediumDesktopWidth = (width) => width >= 1024 && width < 1366;
+const allowedEmails = new Set(
+  String(import.meta.env.VITE_ALLOWED_EMAILS || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+const isEmailAllowed = (email) => {
+  if (!allowedEmails.size) return true;
+  return allowedEmails.has(String(email || '').trim().toLowerCase());
+};
 
 const makeCursorDataUrl = (svg) => `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}") 6 3, auto`;
 
@@ -285,12 +296,27 @@ function App() {
       return () => {};
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+    const unsubscribe = onAuthStateChanged(auth, async (usr) => {
+      if (usr && !isEmailAllowed(usr.email)) {
+        try {
+          await signOut(auth);
+        } catch {
+          // Ignore logout errors for unauthorized users.
+        }
+        setUser(null);
+        setLoading(false);
+        setNotification({
+          message: lang === 'ar' ? 'هذا البريد الإلكتروني غير مسموح له بالدخول' : 'This email address is not allowed to access the app',
+          type: 'error'
+        });
+        return;
+      }
+
       setUser(usr);
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [lang]);
 
   // جلب البيانات
   useEffect(() => {
@@ -1225,6 +1251,12 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
     }
     
     if (!valid) return;
+
+    if (!isEmailAllowed(email)) {
+      setEmailError(t('auth_not_allowed'));
+      onLogin(t('auth_not_allowed'), 'error');
+      return;
+    }
     
     setLoading(true);
     try {
@@ -1256,7 +1288,12 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
     const provider = new GoogleAuthProvider();
     setLoading(true);
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      if (!isEmailAllowed(result?.user?.email)) {
+        await signOut(auth);
+        onLogin(t('auth_not_allowed'), 'error');
+        return;
+      }
       onLogin(t('google_login_success'));
     } catch (err) {
       // Log error only in development
