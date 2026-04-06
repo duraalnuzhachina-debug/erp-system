@@ -443,6 +443,66 @@ button {
     opacity: 1;
   }
 
+  @media (max-width: 480px) {
+    .password-mascot {
+      width: 18px;
+      height: 18px;
+    }
+
+    .password-mascot-face {
+      width: 13px;
+      height: 13px;
+    }
+
+    .password-mascot-eye {
+      top: 5px;
+      width: 2.5px;
+      height: 2.5px;
+    }
+
+    .password-mascot-eye-left {
+      left: 3px;
+    }
+
+    .password-mascot-eye-right {
+      right: 3px;
+    }
+
+    .password-mascot-smile {
+      bottom: 2.5px;
+      width: 5px;
+      height: 2px;
+      border-bottom-width: 1.25px;
+    }
+
+    .password-mascot-hand {
+      top: 5px;
+      width: 6px;
+      height: 3px;
+    }
+
+    .password-mascot-hand-left {
+      left: 1px;
+    }
+
+    .password-mascot-hand-right {
+      right: 1px;
+    }
+
+    .password-mascot.is-covered .password-mascot-hand-left {
+      transform: rotate(-18deg) translateX(2px);
+    }
+
+    .password-mascot.is-covered .password-mascot-hand-right {
+      transform: rotate(18deg) translateX(-2px);
+    }
+
+    .password-mascot.is-revealed .password-mascot-hand-left,
+    .password-mascot.is-revealed .password-mascot-hand-right {
+      top: 2px;
+    }
+  }
+
   .status-good {
     border-color: var(--ok-200);
     background: var(--ok-50);

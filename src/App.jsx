@@ -1366,7 +1366,7 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        className={`w-full px-3 py-2 border rounded-lg bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm ${passError ? 'border-red-400' : 'border-slate-300'} ${lang==='ar' ? 'pl-10' : 'pr-10'}`}
+                        className={`w-full px-3 py-2 border rounded-lg bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm ${passError ? 'border-red-400' : 'border-slate-300'} ${lang==='ar' ? 'pl-9 md:pl-10' : 'pr-9 md:pr-10'}`}
                         placeholder="••••••••"
                         value={pass}
                         onChange={e=>{ setPass(e.target.value); setPassError(''); }}
@@ -1375,7 +1375,7 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className={`absolute top-1/2 -translate-y-1/2 ${lang==='ar' ? 'left-2' : 'right-2'} inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700`}
+                        className={`absolute top-1/2 -translate-y-1/2 ${lang==='ar' ? 'left-1.5 md:left-2' : 'right-1.5 md:right-2'} inline-flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700`}
                         aria-label={showPassword ? (lang === 'ar' ? 'إخفاء كلمة المرور' : 'Hide password') : (lang === 'ar' ? 'إظهار كلمة المرور' : 'Show password')}
                         title={showPassword ? (lang === 'ar' ? 'إخفاء كلمة المرور' : 'Hide password') : (lang === 'ar' ? 'إظهار كلمة المرور' : 'Show password')}
                         tabIndex={-1}
