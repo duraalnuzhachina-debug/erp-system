@@ -124,6 +124,13 @@ const getLocalizedDecisionLabel = (grade, ar) => {
   return base;
 };
 
+const cleanItemLabel = (item, code) => {
+  const itemName = String(item || '').trim();
+  const itemCode = String(code || '').trim();
+  if (itemName && itemCode) return `${itemName} (#${itemCode})`;
+  return itemName || itemCode || '-';
+};
+
 const triggerHaptic = (duration = 8) => {
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
