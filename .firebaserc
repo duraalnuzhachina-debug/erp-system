@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "purchase-system-ed13e"
+  },
+  "targets": {
+    "purchase-system-ed13e": {
+      "hosting": {
+        "live": [
+          "erp-system-live-2026"
+        ]
+      }
+    }
+  }
+}
