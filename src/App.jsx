@@ -4528,7 +4528,9 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
                             <td className="px-3 py-2 font-black text-blue-700">{formatSmartNumber(row.price, 2)}</td>
                             <td className="px-3 py-2">
                               <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-black border ${row.grade === 'A' || row.grade === 'A+' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : row.grade === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
-                                {row.decisionEn || getDecisionLabelByGrade(row.grade || row.status)}
+                                {ar
+                                  ? (row.decisionAr || row.decisionEn || getLocalizedDecisionLabel(row.grade || row.status, true))
+                                  : (row.decisionEn || row.decisionAr || getLocalizedDecisionLabel(row.grade || row.status, false))}
                               </span>
                             </td>
                           </tr>
