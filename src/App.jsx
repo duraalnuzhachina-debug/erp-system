@@ -1577,7 +1577,13 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       const price = cleanPriceValue(p.price);
       if (!p.vendor || price === null) return;
       if (!grouped[p.vendor]) grouped[p.vendor] = [];
-      grouped[p.vendor].push({ price, timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0) });
+      grouped[p.vendor].push({
+        price,
+        timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0),
+        name: p.name,
+        code: p.code,
+        branch: p.branch,
+      });
     });
 
     const avgAll = itemAveragePrice || 0;
@@ -1589,10 +1595,13 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
         const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
         const sortedByTime = [...rows].sort((a, b) => b.timestamp - a.timestamp);
-        const last = sortedByTime[0]?.price || avg;
+        const latestRow = sortedByTime[0] || null;
+        const last = latestRow?.price || avg;
         const variance = prices.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / prices.length;
         const stability = avg > 0 ? Math.sqrt(variance) / avg : 0;
         const recentGood = avgAll > 0 ? (last <= avgAll) : false;
+        const itemCodes = new Set(rows.map((row) => row.code).filter(Boolean));
+        const branchNames = new Set(rows.map((row) => row.branch).filter(Boolean));
 
         let reason;
         let aboveAvg = false;
@@ -1619,12 +1628,38 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
         }
 
         const rankScore = avg + (stability * avg * 0.5) - (recentGood ? (avg * 0.02) : 0);
-        return { vendor, avg, last, reason, rankScore, aboveAvg, sampleCount: rows.length };
+        return {
+          vendor,
+          avg,
+          last,
+          reason,
+          rankScore,
+          aboveAvg,
+          sampleCount: rows.length,
+          itemCount: itemCodes.size,
+          branchCount: branchNames.size,
+          latestItemName: latestRow?.name || '',
+          latestItemCode: latestRow?.code || '',
+          latestBranch: latestRow?.branch || '',
+        };
       })
       .filter(Boolean)
       .sort((a, b) => a.rankScore - b.rankScore)
       .slice(0, 5);
   }, [filteredOps, itemAveragePrice, ar]);
+
+  const supplierComparisonScopeText = useMemo(() => {
+    if (focusMode === 'item' && selectedValue) {
+      return ar ? `المقارنة لهذا الصنف فقط: ${selectedFocusEntity}` : `Comparison for this item only: ${selectedFocusEntity}`;
+    }
+    if (focusMode === 'branch' && selectedValue) {
+      return ar ? `المقارنة لكل أصناف الفرع: ${selectedFocusEntity}` : `Comparison for all items in branch: ${selectedFocusEntity}`;
+    }
+    if (focusMode === 'supplier' && selectedValue) {
+      return ar ? 'هذا العرض يوضح أداء المورد المحدد عبر الأصناف داخل الفترة.' : 'This view shows the selected supplier performance across items in the period.';
+    }
+    return ar ? 'هذه الأرقام تمثل متوسط المورد عبر جميع الأصناف داخل الفلتر الحالي، وليست سعر صنف واحد.' : 'These numbers show the supplier average across all items in the current filter, not a single item price.';
+  }, [focusMode, selectedValue, selectedFocusEntity, ar]);
 
   const savingsByPurchaseId = useMemo(() => {
     if (!sortedAll.length) return new Map();
@@ -1772,19 +1807,20 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const best = supplierSummary.best;
     const worst = supplierSummary.worst;
     const lines = [ar ? 'ملخص الموردين السريع' : 'Quick supplier summary'];
+    lines.push(ar ? `نطاق المقارنة: ${selectedFocusEntity}` : `Comparison scope: ${selectedFocusEntity}`);
 
     if (best) {
       lines.push(
         ar
-          ? `الأفضل: ${best.vendor} (${formatSmartNumber(best.last, 1)} ${t('currency')})`
-          : `Best: ${best.vendor} (${formatSmartNumber(best.last, 1)} ${t('currency')})`
+          ? `الأفضل: ${best.vendor} بمتوسط ${formatSmartNumber(best.avg, 1)} ${t('currency')} عبر ${best.itemCount || 0} صنف`
+          : `Best: ${best.vendor} with ${formatSmartNumber(best.avg, 1)} ${t('currency')} average across ${best.itemCount || 0} items`
       );
     }
     if (worst) {
       lines.push(
         ar
-          ? `الأعلى سعرا: ${worst.vendor} (${formatSmartNumber(worst.last, 1)} ${t('currency')})`
-          : `Highest: ${worst.vendor} (${formatSmartNumber(worst.last, 1)} ${t('currency')})`
+          ? `الأعلى سعرا: ${worst.vendor} بمتوسط ${formatSmartNumber(worst.avg, 1)} ${t('currency')} عبر ${worst.itemCount || 0} صنف`
+          : `Highest: ${worst.vendor} with ${formatSmartNumber(worst.avg, 1)} ${t('currency')} average across ${worst.itemCount || 0} items`
       );
     }
     if (best && worst && best.vendor !== worst.vendor) {
@@ -1796,7 +1832,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       );
     }
     return lines.join('\n');
-  }, [supplierRecommendations, supplierSummary, ar, t]);
+  }, [supplierRecommendations, supplierSummary, ar, t, selectedFocusEntity]);
 
   const handleCopySupplierSummary = useCallback(async () => {
     if (!supplierQuickSummaryText) return;
@@ -2062,6 +2098,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملاحظات سريعة' : 'Quick notes'}</p>
               <p className="mt-2 text-sm font-semibold text-slate-800">{marketStatus.hint}</p>
+                  <p className="mt-2 text-xs font-medium text-slate-500">{supplierComparisonScopeText}</p>
               {actionAlerts.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   {actionAlerts.map((note, index) => (
@@ -2177,6 +2214,13 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'المورد المرجعي' : 'Reference supplier'}</p>
               <p className="mt-1 text-sm font-semibold text-slate-800">{supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}</p>
+                {supplierSummary.best && (
+                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    {ar
+                      ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
+                      : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
+                  </p>
+                )}
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'جودة التحليل' : 'Analysis quality'}</p>
@@ -2227,7 +2271,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
               </div>
               <div className="min-w-0">
                 <h3 className="font-black text-slate-900">{ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}</h3>
-                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{ar ? 'أفضل الخيارات حسب متوسط السعر وسلوك السوق الحالي' : 'Best options based on average price and current market behavior'}</p>
+                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{supplierComparisonScopeText}</p>
               </div>
             </div>
           </div>
@@ -2263,7 +2307,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
           <div className="erp-toolbar p-4 space-y-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملخص القرار' : 'Decision summary'}</p>
-              <p className="mt-2 text-sm font-semibold text-slate-700">{ar ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية.' : 'Suppliers are ranked from cheapest to highest based on the current period average.'}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-700">{ar ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.' : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}</p>
             </div>
             <div className="space-y-2 text-[11px] font-semibold text-slate-600">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
@@ -2271,15 +2315,18 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
                   ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
                   : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
               </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                {supplierComparisonScopeText}
+              </div>
               {supplierSummary.best && supplierSummary.worst && (
                 <div className="flex flex-col gap-2">
                   <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
                     <CheckCircle size={12} />
-                    {ar ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor}` : `Best by average: ${supplierSummary.best.vendor}`}
+                    {ar ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)` : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
                   </span>
                   <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
                     <AlertCircle size={12} />
-                    {ar ? `الأعلى سعراً: ${supplierSummary.worst.vendor}` : `Highest price: ${supplierSummary.worst.vendor}`}
+                    {ar ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)` : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
                   </span>
                 </div>
               )}
@@ -2304,7 +2351,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
                     )}
                     <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
                     <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {ar ? `الاعتماد على ${s.sampleCount || 0} عملية` : `Based on ${s.sampleCount || 0} records`}
+                      {ar ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف` : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
                     </p>
                   </div>
                   <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -2316,10 +2363,26 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
                   <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'آخر سعر شراء' : 'Last purchase price'}</p>
                     <p className="mt-1 text-base font-black text-slate-900">{formatSmartNumber(s.last, 1)} <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span></p>
+                    {(s.latestItemName || s.latestBranch) && (
+                      <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
+                        {ar
+                          ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
+                          : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
+                      </p>
+                    )}
                   </div>
                   <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                      {ar
+                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+                    </p>
                   </div>
                 </div>
                 <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
@@ -3195,7 +3258,21 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-4 phone:p-6 tablet:p-8 relative max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button onClick={() => setSelectedDeal(null)} className="btn-surface absolute top-4 left-4 p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={20}/></button>
             <h3 className="font-black text-lg phone:text-xl mb-1">{t('analyze_deal')}</h3>
-            <p className="text-xs phone:text-sm text-slate-500 mb-5">{cleanItemLabel(selectedDeal.name, selectedDeal.code)} — {cleanVendorLabel(selectedDeal.vendor)} — {formatDateDisplay(selectedDeal.date)}</p>
+            <p className="text-xs phone:text-sm text-slate-500 mb-3">{cleanItemLabel(selectedDeal.name, selectedDeal.code)} — {cleanVendorLabel(selectedDeal.vendor)} — {formatDateDisplay(selectedDeal.date)}</p>
+            <div className="mb-5 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
+              {selectedDeal.branch && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50">
+                  <Building2 size={12} />
+                  {ar ? `الفرع المشتري: ${selectedDeal.branch}` : `Buying branch: ${selectedDeal.branch}`}
+                </span>
+              )}
+              {selectedDeal.vendor && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-white">
+                  <Store size={12} />
+                  {cleanVendorLabel(selectedDeal.vendor)}
+                </span>
+              )}
+            </div>
             {dealAnalysis ? (
               <div className="space-y-4">
                 <div className={`p-5 rounded-2xl border-2 ${getGradeStyle(dealAnalysis.grade).border} ${getGradeStyle(dealAnalysis.grade).bg}`}>
