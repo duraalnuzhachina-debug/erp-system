@@ -554,64 +554,24 @@ function App() {
       const v = (i) => demoVendors[i].name;
       // نولد حركة سنوية موسمية أقرب للواقع مع اختلاف حسب نوع الصنف.
       const roundMultipliers = [0.64, 0.67, 0.71, 0.75, 0.79];
-      const getSeasonalProfile = (code) => {
-        const numericCode = Number(code);
-        if (numericCode >= 1001 && numericCode <= 1006) {
-          return {
-            offsets: [-332, -246, -154, -52, -16],
-            qtyBoost: [1, 0, 2, 6, 9],
-            priceBump: [0, 1, 0, 2, 4],
-          };
-        }
-        if (numericCode >= 1007 && numericCode <= 1008) {
-          return {
-            offsets: [-318, -228, -146, -66, -24],
-            qtyBoost: [0, 1, 1, 3, 4],
-            priceBump: [0, 0, 1, 1, 2],
-          };
-        }
-        if (numericCode >= 1009 && numericCode <= 1010) {
-          return {
-            offsets: [-340, -260, -176, -92, -36],
-            qtyBoost: [0, -1, 0, 1, 2],
-            priceBump: [0, 0, 0, 1, 1],
-          };
-        }
-        if (numericCode >= 1011 && numericCode <= 1017) {
-          return {
-            offsets: [-336, -272, -188, -104, -42],
-            qtyBoost: [0, 1, -1, 2, 1],
-            priceBump: [0, 3, -1, 4, 1],
-          };
-        }
-        if (numericCode >= 1018 && numericCode <= 1019) {
-          return {
-            offsets: [-330, -236, -150, -60, -18],
-            qtyBoost: [0, 0, 1, 3, 5],
-            priceBump: [0, 0, 1, 2, 2],
-          };
-        }
-        if (numericCode >= 1020 && numericCode <= 1024) {
-          return {
-            offsets: [-314, -214, -122, -34, -8],
-            qtyBoost: [0, 1, 3, 7, 10],
-            priceBump: [0, 0, 1, 2, 3],
-          };
-        }
-        if (numericCode >= 1025 && numericCode <= 1026) {
-          return {
-            offsets: [-300, -210, -128, -48, -14],
-            qtyBoost: [0, 0, 1, 2, 3],
-            priceBump: [0, 1, 0, 2, 2],
-          };
-        }
-        return {
-          offsets: [-326, -232, -148, -58, -20],
-          qtyBoost: [0, 0, 1, 2, 3],
-          priceBump: [0, 0, 0, 1, 1],
-        };
-      };
+      const ranges = [
+  [1001,1006,[-332,-246,-154,-52,-16],[1,0,2,6,9],[0,1,0,2,4]],
+  [1007,1008,[-318,-228,-146,-66,-24],[0,1,1,3,4],[0,0,1,1,2]],
+  [1009,1010,[-340,-260,-176,-92,-36],[0,-1,0,1,2],[0,0,0,1,1]],
+  [1011,1017,[-336,-272,-188,-104,-42],[0,1,-1,2,1],[0,3,-1,4,1]],
+  [1018,1019,[-330,-236,-150,-60,-18],[0,0,1,3,5],[0,0,1,2,2]],
+  [1020,1024,[-314,-214,-122,-34,-8],[0,1,3,7,10],[0,0,1,2,3]],
+  [1025,1026,[-300,-210,-128,-48,-14],[0,0,1,2,3],[0,1,0,2,2]],
+];
 
+const getSeasonalProfile = (code) => {
+  const n = Number(code);
+  const r = ranges.find(([min, max]) => n >= min && n <= max);
+
+  return r
+    ? { offsets: r[2], qtyBoost: r[3], priceBump: r[4] }
+    : { offsets: [-326,-232,-148,-58,-20], qtyBoost: [0,0,1,2,3], priceBump: [0,0,0,1,1] };
+};
       const scenario = demoItems.flatMap((item, itemIndex) => {
         const baseQty = 14 + (itemIndex % 5) * 4;
         const profile = getSeasonalProfile(item.code);
