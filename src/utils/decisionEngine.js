@@ -622,3 +622,5 @@ const fallbackAvg = filteredHistory.length > 0
     root?.recommendationEn ?? null,
   impact: impact,
 };
+  });
+}
