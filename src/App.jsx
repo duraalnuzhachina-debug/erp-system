@@ -312,20 +312,20 @@ function App() {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
-      if (usr && !isEmailAllowed(usr.email)) {
-        try {
-          await signOut(auth);
-        } catch {
-          // Ignore logout errors for unauthorized users.
-        }
-        setUser(null);
-        setLoading(false);
-        setNotification({
-          message: lang === 'ar' ? 'هذا البريد الإلكتروني غير مسموح له بالدخول' : 'This email address is not allowed to access the app',
-          type: 'error'
-        });
-        return;
-      }
+ // if (usr && !isEmailAllowed(usr.email)) {
+//   try {
+//     await signOut(auth);
+//   } catch {}
+//   setUser(null);
+//   setLoading(false);
+//   setNotification({
+//     message: lang === 'ar'
+//       ? '🚫 هذا البريد الإلكتروني غير مسموح له بالدخول'
+//       : 'This email address is not allowed to access the app.',
+//     type: 'error',
+//   });
+//   return;
+// }
 
       setUser(usr);
       setLoading(false);
