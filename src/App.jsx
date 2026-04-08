@@ -3762,7 +3762,6 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   useEffect(() => {
     if (selectedBranch === 'all') return;
     if (!availableBranches.includes(selectedBranch)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedBranch('all');
     }
   }, [availableBranches, selectedBranch]);
@@ -3932,15 +3931,16 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .slice(0, isPhone ? 5 : 8);
   }, [scopedByBranch, availableBranches, isPhone]);
+
   const showTrendValueLabels = !isPhone || trendData.length <= 6;
   const showSupplierValueLabels = !isPhone || supplierData.length <= 5;
   const showItemValueLabels = !isPhone || itemImpactData.length <= 5;
   const showBranchValueLabels = !isPhone || branchData.length <= 5;
 
   const computeVerticalChartHeight = (count) => {
-    const minH = isPhone ? 178 : 188;
-    const rowH = isPhone ? 38 : 40;
-    const maxH = isPhone ? 360 : 420;
+    const minH = isPhone ? 190 : 188;
+    const rowH = isPhone ? 42 : 40;
+    const maxH = isPhone ? 380 : 420;
     return Math.min(maxH, Math.max(minH, (count * rowH) + 26));
   };
 
@@ -4310,8 +4310,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
             </ResponsiveContainer>
             )}
             {timeFilter === 'realtime' && trendData.length > 8 && (
-              <p className="mt-2 text-[11px] font-semibold text-slate-500 text-center">
+              <p className="mt-2 text-[11px] font-semibold text-slate-500 text-center flex items-center justify-center gap-1">
+                <ChevronsRight size={14} className="text-slate-400" />
                 {ar ? 'اسحب أفقيا لعرض جميع النقاط' : 'Scroll horizontally to view all points'}
+                <ChevronsLeft size={14} className="text-slate-400" />
               </p>
             )}
           </>
@@ -4329,8 +4331,8 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           {!supplierData.length && <p className="text-xs font-bold text-slate-500 mb-3">{ar ? 'البيانات غير كافية للعرض' : 'Not enough data to display'}</p>}
           <div dir="ltr" className={`w-full ${supplierChartMinWidth ? 'overflow-x-auto pb-2' : ''}`}>
           <div className="w-full" style={{ minWidth: supplierChartMinWidth ? `${supplierChartMinWidth}px` : '100%' }}>
-          <ResponsiveContainer width="100%" height={supplierChartHeight + (isPhone ? 18 : 8)}>
-            <BarChart data={supplierData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:6}} layout="vertical">
+          <ResponsiveContainer width="100%" height={supplierChartHeight + (isPhone ? 24 : 8)}>
+            <BarChart data={supplierData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:isPhone ? 24 : 6}} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke={analyticsPalette.grid} horizontal={false}/>
               <XAxis
                 type="number"
@@ -4383,8 +4385,8 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           {!itemImpactData.length && <p className="text-xs font-bold text-slate-500 mb-3">{ar ? 'البيانات غير كافية للعرض' : 'Not enough data to display'}</p>}
           <div dir="ltr" className={`w-full ${verticalChartMinWidth ? 'overflow-x-auto pb-2' : ''}`}>
           <div className="w-full" style={{ minWidth: verticalChartMinWidth ? `${verticalChartMinWidth}px` : '100%' }}>
-          <ResponsiveContainer width="100%" height={itemChartHeight + (isPhone ? 18 : 8)}>
-            <BarChart data={itemImpactData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:6}} layout="vertical">
+          <ResponsiveContainer width="100%" height={itemChartHeight + (isPhone ? 24 : 8)}>
+            <BarChart data={itemImpactData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:isPhone ? 24 : 6}} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke={analyticsPalette.grid} horizontal={false}/>
               <XAxis
                 type="number"
@@ -4436,8 +4438,8 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
             {!branchData.length && <p className="text-xs font-bold text-slate-500 mb-3">{ar ? 'البيانات غير كافية للعرض' : 'Not enough data to display'}</p>}
             <div dir="ltr" className={`w-full ${verticalChartMinWidth ? 'overflow-x-auto pb-2' : ''}`}>
             <div className="w-full" style={{ minWidth: verticalChartMinWidth ? `${verticalChartMinWidth}px` : '100%' }}>
-            <ResponsiveContainer width="100%" height={branchChartHeight + (isPhone ? 18 : 8)}>
-              <BarChart data={branchData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:6}} layout="vertical">
+            <ResponsiveContainer width="100%" height={branchChartHeight + (isPhone ? 24 : 8)}>
+              <BarChart data={branchData} margin={{top:6, right:isPhone ? 10 : 16, left:isPhone ? 6 : 8, bottom:isPhone ? 24 : 6}} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke={analyticsPalette.grid} horizontal={false}/>
                 <XAxis
                   type="number"
@@ -4508,10 +4510,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
             </div>
           </div>
 
-          <div className="p-4 phone:p-5 space-y-4 overflow-y-auto flex-1">
+          <div className="p-3 phone:p-5 space-y-4 overflow-y-auto flex-1">
             {drilldownSummary ? (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 phone:grid-cols-2 gap-3">
                   <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-3">
                     <p className="text-[10px] font-black text-slate-500 uppercase">{ar ? 'عدد الفواتير' : 'Invoices'}</p>
                     <p className="text-2xl font-black tracking-tight text-slate-900 mt-1">{drilldownSummary.invoiceCount}</p>
@@ -4544,23 +4546,23 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
                     <table className="w-full min-w-[620px] text-xs">
                       <thead className="bg-white border-b border-slate-100 text-slate-500">
                         <tr>
-                          <th className="px-3 py-2 text-start font-black">{t('date')}</th>
-                          {drilldown.type !== 'branch' && <th className="px-3 py-2 text-start font-black">{t('branch')}</th>}
-                          {drilldown.type !== 'supplier' && <th className="px-3 py-2 text-start font-black">{t('vendor')}</th>}
-                          {drilldown.type !== 'item' && <th className="px-3 py-2 text-start font-black">{t('item')}</th>}
-                          <th className="px-3 py-2 text-start font-black">{t('price')}</th>
-                          <th className="px-3 py-2 text-start font-black">{t('decision')}</th>
+                          <th className="px-2 py-2 text-start font-black">{t('date')}</th>
+                          {drilldown.type !== 'branch' && <th className="px-2 py-2 text-start font-black">{t('branch')}</th>}
+                          {drilldown.type !== 'supplier' && <th className="px-2 py-2 text-start font-black">{t('vendor')}</th>}
+                          {drilldown.type !== 'item' && <th className="px-2 py-2 text-start font-black">{t('item')}</th>}
+                          <th className="px-2 py-2 text-start font-black">{t('price')}</th>
+                          <th className="px-2 py-2 text-start font-black">{t('decision')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {drilldownInvoices.map((row) => (
                           <tr key={row.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="px-3 py-2 font-bold text-slate-600 whitespace-nowrap">{formatDateDisplay(row.date)}</td>
-                            {drilldown.type !== 'branch' && <td className="px-3 py-2 font-bold text-slate-700">{row.branch || '—'}</td>}
-                            {drilldown.type !== 'supplier' && <td className="px-3 py-2 font-bold text-slate-700">{cleanVendorLabel(row.vendor)}</td>}
-                            {drilldown.type !== 'item' && <td className="px-3 py-2 font-black text-slate-800">{cleanItemLabel(row.name, row.code)}</td>}
-                            <td className="px-3 py-2 font-black text-blue-700">{formatSmartNumber(row.price, 2)}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-2 py-2 font-bold text-slate-600 whitespace-nowrap">{formatDateDisplay(row.date)}</td>
+                            {drilldown.type !== 'branch' && <td className="px-2 py-2 font-bold text-slate-700">{row.branch || '—'}</td>}
+                            {drilldown.type !== 'supplier' && <td className="px-2 py-2 font-bold text-slate-700">{cleanVendorLabel(row.vendor)}</td>}
+                            {drilldown.type !== 'item' && <td className="px-2 py-2 font-black text-slate-800">{cleanItemLabel(row.name, row.code)}</td>}
+                            <td className="px-2 py-2 font-black text-blue-700">{formatSmartNumber(row.price, 2)}</td>
+                            <td className="px-2 py-2">
                               <span className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-black border ${row.grade === 'A' || row.grade === 'A+' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : row.grade === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
                                 {ar
                                   ? (row.decisionAr || row.decisionEn || getLocalizedDecisionLabel(row.grade || row.status, true))
@@ -4586,7 +4588,6 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     </>
   );
 }
-
 // ==========================================
 // MASTER DATA VIEW
 // ==========================================
