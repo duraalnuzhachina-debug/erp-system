@@ -420,7 +420,9 @@ export function calculateRootCause(currentPurchase, historicalPurchases, setting
 
   const threshold = Math.max(0.02, riskyThreshold * Math.max(0.5, sensitivity));
   const branchHigh = branchDiff > threshold;
-  const supplierHigh = supplierDiff > threshold;const dynamicThreshold = Math.max(0.02, Math.abs(globalDiff) * 0.3);
+  const supplierHigh = supplierDiff > threshold;
+
+const dynamicThreshold = Math.max(0.02, Math.abs(globalDiff) * 0.3);
 
 const marketSimilar =
   Math.abs(branchDiff - supplierDiff) <= dynamicThreshold;
@@ -586,41 +588,37 @@ const fallbackAvg = filteredHistory.length > 0
     const impact = avgPrice > 0 ? calculateImpact(p.price, avgPrice, qty) : 0;
 
     return analysis
-      ? {
-          ...p,
-          score: analysis.score,
-          grade: analysis.grade,
-          decisionAr: analysis.decisionAr,
-          decisionEn: analysis.decisionEn,
-          reasonAr:
-            p.reasonAr ??
-            analysis.reasons?.[0]?.ar ?? null,
-          reasonEn:
-            p.reasonEn ??
-            analysis.reasons?.[0]?.en ?? null,
-          causeSource: p.causeSource ?? root?.source ?? null,
-          const pick = (a, b) => a ?? b ?? null;
-          recommendationAr:
-            p.recommendationAr ??
-            root?.recommendationAr ?? null,
-          recommendationEn:
-            p.recommendationEn ??
-            root?.recommendationEn ?? null,
-          impact: impact,
-        }
-      : {
-          ...p,
-          score: null,
-          grade: p.status || null,
-          causeSource: p.causeSource ?? root?.source ?? null,
-          if (!metrics || metrics.avg_price <= 0) return null;
-          recommendationAr:
-            p.recommendationAr ??
-            root?.recommendationAr ?? null,
-          recommendationEn:
-            p.recommendationEn ??
-            root?.recommendationEn ?? null,
-          impact: impact,
-        };
-  });
+     ? {
+  ...p,
+  score: analysis.score,
+  grade: analysis.grade,
+  decisionAr: analysis.decisionAr,
+  decisionEn: analysis.decisionEn,
+  reasonAr:
+    p.reasonAr ??
+    analysis.reasons?.[0]?.ar ?? null,
+  reasonEn:
+    p.reasonEn ??
+    analysis.reasons?.[0]?.en ?? null,
+  causeSource: p.causeSource ?? root?.source ?? null,
+  recommendationAr:
+    p.recommendationAr ??
+    root?.recommendationAr ?? null,
+  recommendationEn:
+    p.recommendationEn ??
+    root?.recommendationEn ?? null,
+  impact: impact,
 }
+: {
+  ...p,
+  score: null,
+  grade: p.status || null,
+  causeSource: p.causeSource ?? root?.source ?? null,
+  recommendationAr:
+    p.recommendationAr ??
+    root?.recommendationAr ?? null,
+  recommendationEn:
+    p.recommendationEn ??
+    root?.recommendationEn ?? null,
+  impact: impact,
+};
