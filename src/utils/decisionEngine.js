@@ -206,7 +206,24 @@ export function calculateDecisionScore(currentPrice, historicalPurchases, settin
   } = { ...DEFAULT_ENGINE_SETTINGS, ...settings };
 
   const metrics = calculateBaseMetrics(currentPrice, historicalPurchases);
-  if (!metrics || metrics.avg_price <= 0) return null;
+  if (!metrics || metrics.avg_price <= 0) {
+  return {
+    score: 0,
+    grade: 'C',
+    decisionAr: 'لا توجد بيانات كافية',
+    decisionEn: 'Insufficient data',
+    warnings: [],
+    reasons: [],
+    avgPrice: 0,
+    minPrice: 0,
+    maxPrice: 0,
+    lastPrice: 0,
+    priceDiff: 0,
+    trend: 0,
+    consistency: 0,
+    sampleCount: 0,
+  };
+}
 
   const { avg_price, current_price, change_percent, trend_percent } = metrics;
 
@@ -403,9 +420,10 @@ export function calculateRootCause(currentPurchase, historicalPurchases, setting
 
   const threshold = Math.max(0.02, riskyThreshold * Math.max(0.5, sensitivity));
   const branchHigh = branchDiff > threshold;
-  const supplierHigh = supplierDiff > threshold;
-  const marketSimilar = Math.abs(branchDiff - supplierDiff) <= ROOT_CAUSE_MARKET_SIMILARITY;
+  const supplierHigh = supplierDiff > threshold;const dynamicThreshold = Math.max(0.02, Math.abs(globalDiff) * 0.3);
 
+const marketSimilar =
+  Math.abs(branchDiff - supplierDiff) <= dynamicThreshold;
   let source = 'normal';
   let causeAr = 'لا يوجد ارتفاع غير طبيعي';
   let causeEn = 'No unusual increase';
@@ -544,7 +562,9 @@ export function enrichPurchasesWithScores(purchases, settings) {
   return purchases.map((p) => {
     if (p.score != null && p.grade) return p;
 
-    const currentTs = p.date ? new Date(p.date).getTime() : p.timestamp || 0;
+    const currentTs = Number.isFinite(new Date(p.date).getTime())
+  ? new Date(p.date).getTime()
+  : (p.timestamp || 0);
     const history = (byCode[p.code] || [])
       .filter(
         (h) =>
@@ -557,9 +577,10 @@ export function enrichPurchasesWithScores(purchases, settings) {
 
     // احسب المتوسط مباشرة من التاريخ المتاح حتى لو كان أقل من MIN_VALID_RECORDS
     const historyPrices = history.map((h) => cleanPriceValue(h.price)).filter((v) => v !== null && v > 0);
-    const fallbackAvg = historyPrices.length > 0
-      ? historyPrices.reduce((s, v) => s + v, 0) / historyPrices.length
-      : 0;
+    const filteredHistory = filterOutliers(historyPrices);
+const fallbackAvg = filteredHistory.length > 0
+  ? filteredHistory.reduce((s, v) => s + v, 0) / filteredHistory.length
+  : 0;
     const avgPrice = analysis?.avgPrice || fallbackAvg;
     const qty = Number(p.qty) || 1;
     const impact = avgPrice > 0 ? calculateImpact(p.price, avgPrice, qty) : 0;
@@ -578,8 +599,7 @@ export function enrichPurchasesWithScores(purchases, settings) {
             p.reasonEn ??
             analysis.reasons?.[0]?.en ?? null,
           causeSource: p.causeSource ?? root?.source ?? null,
-          causeAr: p.causeAr ?? root?.causeAr ?? null,
-          causeEn: p.causeEn ?? root?.causeEn ?? null,
+          const pick = (a, b) => a ?? b ?? null;
           recommendationAr:
             p.recommendationAr ??
             root?.recommendationAr ?? null,
@@ -593,8 +613,7 @@ export function enrichPurchasesWithScores(purchases, settings) {
           score: null,
           grade: p.status || null,
           causeSource: p.causeSource ?? root?.source ?? null,
-          causeAr: p.causeAr ?? root?.causeAr ?? null,
-          causeEn: p.causeEn ?? root?.causeEn ?? null,
+          if (!metrics || metrics.avg_price <= 0) return null;
           recommendationAr:
             p.recommendationAr ??
             root?.recommendationAr ?? null,
