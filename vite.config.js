@@ -1,12 +1,8 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-// https://vite.dev/config/
 export default defineConfig({
   build: {
-    chunkSizeWarningLimit: 700,
-    minify: false,
-    reportCompressedSize: false,
+    chunkSizeWarningLimit: 1000,
+    minify: 'esbuild', // 🔥 أهم تعديل
+    reportCompressedSize: true,
   },
   plugins: [
     react({
