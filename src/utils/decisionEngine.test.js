@@ -5,6 +5,8 @@ import {
   calculateDecisionScore,
   filterOutliers,
   getValidPrices,
+  calculateRootCause,
+  enrichPurchasesWithScores
 } from './decisionEngine';
 
 describe('decisionEngine', () => {
@@ -15,6 +17,11 @@ describe('decisionEngine', () => {
 
     it('keeps at least the latest price when fallback filtering removes everything', () => {
       expect(filterOutliers([1, 1, 1, 1000])).toEqual([1000]);
+    });
+
+    it('handles empty or very small arrays safely', () => {
+      expect(filterOutliers([])).toEqual([]);
+      expect(filterOutliers([50])).toEqual([50]);
     });
   });
 
@@ -28,6 +35,16 @@ describe('decisionEngine', () => {
 
       expect(getValidPrices(purchases)).toEqual([70, 80, 90]);
     });
+
+    it('handles corrupted records by ignoring NaN or missing prices', () => {
+      const purchases = [
+        { price: null, timestamp: 100 },
+        { price: 50, timestamp: 200 },
+        { price: "invalid", timestamp: 300 },
+      ];
+
+      expect(getValidPrices(purchases)).toEqual([50]);
+    });
   });
 
   describe('calculateBaseMetrics', () => {
@@ -40,6 +57,7 @@ describe('decisionEngine', () => {
         change_percent: 0,
         trend_percent: 0,
         trend_direction: 'stable',
+        sample_count: 1
       });
     });
 
@@ -101,6 +119,51 @@ describe('decisionEngine', () => {
         sampleCount: 3,
       });
       expect(result.warnings.some((warning) => warning.en.includes('High expected financial impact'))).toBe(true);
+    });
+  });
+
+  describe('calculateRootCause', () => {
+    it('identifies supplier as the root cause when only supplier deviates', () => {
+      const current = { code: 'A', branch: 'Branch 1', vendor: 'Vendor X', price: 120 };
+      const history = [
+        { code: 'A', branch: 'Branch 1', vendor: 'Vendor Y', price: 100, timestamp: 1 },
+        { code: 'A', branch: 'Branch 2', vendor: 'Vendor Z', price: 100, timestamp: 2 },
+        { code: 'A', branch: 'Branch 1', vendor: 'Vendor X', price: 120, timestamp: 3 },
+      ];
+      
+      const result = calculateRootCause(current, history);
+      expect(result.source).toBe('supplier');
+    });
+
+    it('identifies branch as the root cause when branch averages are higher', () => {
+      const current = { code: 'A', branch: 'Branch X', vendor: 'Vendor 1', price: 130 };
+      const history = [
+        { code: 'A', branch: 'Branch X', vendor: 'Vendor 1', price: 130, timestamp: 1 },
+        { code: 'A', branch: 'Branch Y', vendor: 'Vendor 1', price: 100, timestamp: 2 },
+        { code: 'A', branch: 'Branch Z', vendor: 'Vendor 2', price: 100, timestamp: 3 },
+      ];
+      
+      const result = calculateRootCause(current, history);
+      expect(result.source).toBe('branch');
+    });
+  });
+
+  describe('enrichPurchasesWithScores', () => {
+    it('processes an array of purchases and attaches scores using historical contexts', () => {
+      const purchases = [
+        { id: 1, code: 'ITEM1', price: 100, timestamp: 1000 },
+        { id: 2, code: 'ITEM1', price: 105, timestamp: 2000 },
+        { id: 3, code: 'ITEM1', price: 150, timestamp: 3000 }, // Huge jump
+      ];
+
+      const enriched = enrichPurchasesWithScores(purchases, {});
+      
+      expect(enriched).toHaveLength(3);
+      // The first two shouldn't have scores (not enough history yet)
+      expect(enriched[0].score).toBeNull();
+      // The third one should have a bad grade due to the jump
+      expect(enriched[2].score).toBeLessThan(0);
+      expect(enriched[2].grade).toBe('C');
     });
   });
 });
