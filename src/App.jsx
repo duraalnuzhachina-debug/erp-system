@@ -1382,1232 +1382,1122 @@ function LoginScreen({ onLogin, lang, setLang, t }) {
 // 2. شاشة الموجز Dashboard
 // ==========================================
 function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang, settings, timeFilter, setTimeFilter, customFrom, setCustomFrom, customTo, setCustomTo, initialFilters }) {
-  const ar = lang === 'ar';
-  const sourcePurchases = isActive ? purchases : EMPTY_LIST;
-  const [focusMode, setFocusMode] = useState(initialFilters?.focusMode || 'item');
-  const [selectedItemCode, setSelectedItemCode] = useState(initialFilters?.selectedItemCode || '');
-  const [selectedSupplier, setSelectedSupplier] = useState(initialFilters?.selectedSupplier || '');
-  const [selectedBranch, setSelectedBranch] = useState(initialFilters?.selectedBranch || '');
-  const [copySummaryState, setCopySummaryState] = useState('idle');
-  const [showSecondaryInsights, setShowSecondaryInsights] = useState(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        DASHBOARD_FILTERS_KEY,
-        JSON.stringify({
-          timeFilter,
-          focusMode,
-          selectedItemCode,
-          selectedSupplier,
-          selectedBranch,
-          customFrom,
-          customTo,
-        })
-      );
-    } catch {
-      // Ignore storage errors silently.
-    }
-  }, [timeFilter, focusMode, selectedItemCode, selectedSupplier, selectedBranch, customFrom, customTo]);
-
-  const enriched = useMemo(
-    () => (isActive ? (enrichedPurchases || enrichPurchasesWithScores(sourcePurchases, settings)) : EMPTY_LIST),
-    [isActive, enrichedPurchases, sourcePurchases, settings]
-  );
-
-  const sortedRecentAll = useMemo(() =>
-    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
-  [enriched]);
-
-  const timeScopedOps = useMemo(() => {
-    if (!sortedRecentAll.length) return [];
-    const now = new Date();
-    const nowTs = now.getTime();
-    const dayMs = 24 * 60 * 60 * 1000;
-
-    if (timeFilter === 'realtime') {
-      return sortedRecentAll;
-    }
-
-    if (timeFilter === 'weekly' || timeFilter === 'monthly') {
-      const spanDays = timeFilter === 'weekly' ? 7 : 30;
-      const cutoff = nowTs - (spanDays * dayMs);
-      const list = sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
-      return list.length ? list : sortedRecentAll.slice(0, 20);
-    }
-
-    const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
-    const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : nowTs;
-    const list = sortedRecentAll.filter((p) => {
-      const ts = getRecordTimestamp(p);
-      return ts >= fromTs && ts <= toTs;
-    });
-    return list.length ? list : sortedRecentAll.slice(0, 20);
-  }, [sortedRecentAll, timeFilter, customFrom, customTo]);
-
-  const decisionBasisText = useMemo(() => {
-    if (timeFilter === 'realtime') return ar ? 'حسب كل العمليات حتى الآن' : 'Based on all operations until now';
-    if (timeFilter === 'weekly') return ar ? 'حسب آخر 7 أيام' : 'Based on last 7 days';
-    if (timeFilter === 'monthly') return ar ? 'حسب آخر 30 يوم' : 'Based on last 30 days';
-    return ar ? 'حسب الفترة المختارة' : 'Based on selected period';
-  }, [timeFilter, ar]);
-
-  const selectedValue = useMemo(() => {
-    if (focusMode === 'all') return '';
-    if (focusMode === 'supplier') return selectedSupplier || '';
-    if (focusMode === 'branch') return selectedBranch || '';
-    return selectedItemCode || '';
-  }, [focusMode, selectedSupplier, selectedBranch, selectedItemCode]);
-
-  const filteredOps = useMemo(() => {
-    if (!timeScopedOps.length) return [];
-    if (focusMode === 'all') return timeScopedOps;
-    if (!selectedValue) return timeScopedOps;
-    if (focusMode === 'supplier') return timeScopedOps.filter((p) => p.vendor === selectedValue);
-    if (focusMode === 'branch') return timeScopedOps.filter((p) => p.branch === selectedValue);
-    return timeScopedOps.filter((p) => p.code === selectedValue);
-  }, [timeScopedOps, selectedValue, focusMode]);
-
-  const focusOptions = useMemo(() => {
-    if (focusMode === 'all') return [];
-    if (focusMode === 'supplier') {
-      return Array.from(new Set(timeScopedOps.map((p) => p.vendor).filter(Boolean))).map((x) => ({ value: x, label: x }));
-    }
-    if (focusMode === 'branch') {
-      return Array.from(new Set(timeScopedOps.map((p) => p.branch).filter(Boolean))).map((x) => ({ value: x, label: x }));
-    }
-    const byCode = {};
-    timeScopedOps.forEach((p) => {
-      if (!p.code) return;
-      if (!byCode[p.code]) byCode[p.code] = p.name || p.code;
-    });
-    return Object.entries(byCode).map(([code, name]) => ({ value: code, label: `${name} (#${code})` }));
-  }, [focusMode, timeScopedOps]);
-
-  const selectedFocusEntity = useMemo(() => {
-    if (focusMode === 'all' || !selectedValue) return ar ? 'كل البيانات ضمن الفلتر' : 'All records in this filter';
-    if (focusMode === 'supplier' || focusMode === 'branch') return selectedValue;
-    return focusOptions.find((opt) => opt.value === selectedValue)?.label || selectedValue;
-  }, [focusMode, ar, selectedValue, focusOptions]);
-
-  const currentItemPrices = useMemo(() => {
-    if (focusMode !== 'item' || !selectedValue) return [];
-    return [...filteredOps]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
-      .map((p) => cleanPriceValue(p.price))
-      .filter((v) => v !== null);
-  }, [filteredOps, focusMode, selectedValue]);
-
-  const recentOps = useMemo(() => filteredOps.slice(0, 5), [filteredOps]);
-
-  const itemAveragePrice = useMemo(() => {
-    if (currentItemPrices.length < 2) return null;
-    const filtered = filterOutliers(currentItemPrices);
-    if (!filtered.length) return null;
-    return filtered.reduce((s, v) => s + v, 0) / filtered.length;
-  }, [currentItemPrices]);
-
-  const itemLastPrice = useMemo(() => {
-    if (!currentItemPrices.length) return null;
-    return currentItemPrices[currentItemPrices.length - 1];
-  }, [currentItemPrices]);
-
-  const marketStatus = useMemo(() => {
-    const prices = currentItemPrices.slice(-6);
-    if (prices.length >= 3) {
-      const rising = prices.every((v, i) => i === 0 || v >= prices[i - 1] * 0.99);
-      const falling = prices.every((v, i) => i === 0 || v <= prices[i - 1] * 1.01);
-
-      if (rising) return { key: 'rising', label: ar ? 'صاعد' : 'Rising', hint: ar ? 'السعر يرتفع ضمن الصنف المحدد' : 'Price is rising for the selected item' };
-      if (falling) return { key: 'falling', label: ar ? 'هابط' : 'Falling', hint: ar ? 'السعر ينخفض ضمن الصنف المحدد' : 'Price is falling for the selected item' };
-      return { key: 'volatile', label: ar ? 'متذبذب' : 'Volatile', hint: ar ? 'السعر غير ثابت ضمن الصنف المحدد' : 'Price is unstable for the selected item' };
-    }
-
-      const total = filteredOps.length;
-      if (!total) return { key: 'stable', label: ar ? 'متوازن' : 'Balanced', hint: ar ? 'ملخص عام حسب الفلتر المحدد' : 'Overall summary based on the selected filter' };
-
-      let riskyCount = 0;
-      let goodCount = 0;
-      filteredOps.forEach((p) => {
-        const grade = String(p.grade || '').toUpperCase();
-        if (grade === 'A' || grade === 'A+') goodCount += 1;
-        else if (grade === 'C' || grade === 'D') riskyCount += 1;
-      });
-
-      const riskyShare = riskyCount / total;
-      const goodShare = goodCount / total;
-
-    if (riskyShare >= 0.3) return { key: 'rising', label: ar ? 'ضغط سعري' : 'Price pressure', hint: ar ? 'النتائج الحالية تحتاج مراجعة أكبر' : 'Current results need closer review' };
-    if (goodShare >= 0.6) return { key: 'falling', label: ar ? 'أداء جيد' : 'Healthy performance', hint: ar ? 'المشتريات ضمن نطاق جيد في هذه الفترة' : 'Purchasing is performing well in this period' };
-    return { key: 'volatile', label: ar ? 'نتائج مختلطة' : 'Mixed results', hint: ar ? 'النتائج تحتاج قراءة تفصيلية حسب المورد أو الصنف' : 'Results need deeper review by supplier or item' };
-  }, [currentItemPrices, filteredOps, ar]);
-
-  const supplierRecommendations = useMemo(() => {
-    if (!filteredOps.length) return [];
-
-    const grouped = {};
-    filteredOps.forEach((p) => {
-      const price = cleanPriceValue(p.price);
-      if (!p.vendor || price === null) return;
-      if (!grouped[p.vendor]) grouped[p.vendor] = [];
-      grouped[p.vendor].push({
-        price,
-        timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0),
-        name: p.name,
-        code: p.code,
-        branch: p.branch,
-      });
-    });
-
-    const avgAll = itemAveragePrice || 0;
-
-    return Object.entries(grouped)
-      .map(([vendor, rows]) => {
-        const prices = rows.map((r) => r.price);
-        if (!prices.length) return null;
-
-        const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
-        const sortedByTime = [...rows].sort((a, b) => b.timestamp - a.timestamp);
-        const latestRow = sortedByTime[0] || null;
-        const last = latestRow?.price || avg;
-        const variance = prices.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / prices.length;
-        const stability = avg > 0 ? Math.sqrt(variance) / avg : 0;
-        const recentGood = avgAll > 0 ? (last <= avgAll) : false;
-        const itemCodes = new Set(rows.map((row) => row.code).filter(Boolean));
-        const branchNames = new Set(rows.map((row) => row.branch).filter(Boolean));
-
-        let reason;
-        let aboveAvg = false;
-        if (avgAll > 0) {
-          const pctDiff = (avg - avgAll) / avgAll;
-          aboveAvg = pctDiff > 0.02;
-          if (pctDiff <= -0.03) {
-            reason = ar
-              ? `أرخص من المتوسط بـ ${Math.round(Math.abs(pctDiff) * 100)}%`
-              : `${Math.round(Math.abs(pctDiff) * 100)}% below average`;
-          } else if (pctDiff > 0.02) {
-            reason = ar
-              ? `أعلى من المتوسط بـ ${Math.round(pctDiff * 100)}%`
-              : `${Math.round(pctDiff * 100)}% above average`;
-          } else if (stability <= 0.05) {
-            reason = ar ? 'سعر مناسب' : 'Suitable price';
-          } else {
-            reason = ar ? 'سعر مناسب' : 'Suitable price';
-          }
-        } else {
-          reason = stability <= 0.05
-            ? (ar ? 'سعر مستقر' : 'Stable price')
-            : (ar ? 'الأرخص المتاح' : 'Cheapest available');
-        }
-
-        const rankScore = avg + (stability * avg * 0.5) - (recentGood ? (avg * 0.02) : 0);
-        return {
-          vendor,
-          avg,
-          last,
-          reason,
-          rankScore,
-          aboveAvg,
-          sampleCount: rows.length,
-          itemCount: itemCodes.size,
-          branchCount: branchNames.size,
-          latestItemName: latestRow?.name || '',
-          latestItemCode: latestRow?.code || '',
-          latestBranch: latestRow?.branch || '',
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.rankScore - b.rankScore)
-      .slice(0, 5);
-  }, [filteredOps, itemAveragePrice, ar]);
-
-  const supplierComparisonScopeText = useMemo(() => {
-    if (focusMode === 'item' && selectedValue) {
-      return ar ? `المقارنة لهذا الصنف فقط: ${selectedFocusEntity}` : `Comparison for this item only: ${selectedFocusEntity}`;
-    }
-    if (focusMode === 'branch' && selectedValue) {
-      return ar ? `المقارنة لكل أصناف الفرع: ${selectedFocusEntity}` : `Comparison for all items in branch: ${selectedFocusEntity}`;
-    }
-    if (focusMode === 'supplier' && selectedValue) {
-      return ar ? 'هذا العرض يوضح أداء المورد المحدد عبر الأصناف داخل الفترة.' : 'This view shows the selected supplier performance across items in the period.';
-    }
-    return ar ? 'هذه الأرقام تمثل متوسط المورد عبر جميع الأصناف داخل الفلتر الحالي، وليست سعر صنف واحد.' : 'These numbers show the supplier average across all items in the current filter, not a single item price.';
-  }, [focusMode, selectedValue, selectedFocusEntity, ar]);
-
-  const savingsByPurchaseId = useMemo(() => {
-    if (!sortedRecentAll.length) return new Map();
-
-    const historyByCode = new Map();
-    const resolvedSavings = new Map();
-
-    [...sortedRecentAll]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
-      .forEach((purchase) => {
-        const code = String(purchase.code || '').trim();
-        const price = cleanPriceValue(purchase.price);
-        const qty = Number(purchase.qty) || 1;
-
-        if (!purchase.id || !code || price === null) return;
-
-        const history = historyByCode.get(code) || [];
-        let savings = 0;
-
-        if (history.length >= 2) {
-          const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
-          if (baseline > price) savings = (baseline - price) * qty;
-        } else {
-          const impact = Number(purchase.impact);
-          if (Number.isFinite(impact) && impact < 0) savings = Math.abs(impact);
-        }
-
-        resolvedSavings.set(purchase.id, savings);
-        historyByCode.set(code, [...history, price].slice(-10));
-      });
-
-    return resolvedSavings;
-  }, [sortedRecentAll]);
-
-  const periodStats = useMemo(() => {
-    const totalOps = filteredOps.length;
-    const totalSpend = filteredOps.reduce((sum, purchase) => sum + getSafePurchaseTotal(purchase), 0);
-    const gradeCount = { good: 0, ok: 0, bad: 0 };
-    filteredOps.forEach((p) => {
-      const g = p.grade || '';
-      if (!g) return;
-      if (g === 'A' || g === 'A+') gradeCount.good++;
-      else if (g === 'B') gradeCount.ok++;
-      else gradeCount.bad++;
-    });
-    const totalSavings = filteredOps.reduce((sum, purchase) => {
-      if (!purchase?.id) return sum;
-      return sum + (savingsByPurchaseId.get(purchase.id) || 0);
-    }, 0);
-
-    const averageInvoiceValue = totalOps > 0 ? totalSpend / totalOps : 0;
-    return { totalOps, totalSpend, gradeCount, totalSavings, averageInvoiceValue };
-  }, [filteredOps, savingsByPurchaseId]);
-
-
-
-  const actionAlerts = useMemo(() => {
-    const actions = [];
-    if (!filteredOps.length) return actions;
-
-    if (marketStatus.key === 'rising') {
-      actions.push(ar ? 'السعر أعلى من المعتاد' : 'Price is above normal');
-    }
-
-    if (itemAveragePrice && itemLastPrice && itemLastPrice > itemAveragePrice * 1.08) {
-      actions.push(ar ? 'راجع آخر سعر شراء' : 'Review last purchase price');
-    }
-
-    const byBranch = {};
-    filteredOps.forEach((p) => {
-      const price = cleanPriceValue(p.price);
-      if (!p.branch || price === null) return;
-      if (!byBranch[p.branch]) byBranch[p.branch] = [];
-      byBranch[p.branch].push(price);
-    });
-
-    if (itemAveragePrice && itemAveragePrice > 0) {
-      let highBranch = null;
-      Object.entries(byBranch).forEach(([branch, prices]) => {
-        const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
-        if (avg > itemAveragePrice * 1.08) {
-          if (!highBranch || avg > highBranch.avg) highBranch = { branch, avg };
-        }
-      });
-      if (highBranch) {
-        actions.push(ar ? `فرع ${highBranch.branch} يشتري بسعر مرتفع` : `${highBranch.branch} branch buys at a high price`);
-      }
-    }
-
-    return actions.slice(0, 2);
-  }, [filteredOps, marketStatus, itemAveragePrice, itemLastPrice, ar]);
-
-  const bestWorst = useMemo(() => {
-    const withScore = recentOps.filter((p) => Number.isFinite(Number(p.score)));
-    if (!withScore.length) return { bestId: null, worstId: null };
-    const best = [...withScore].sort((a, b) => Number(b.score) - Number(a.score))[0];
-    const worst = [...withScore].sort((a, b) => Number(a.score) - Number(b.score))[0];
-    return { bestId: best?.id || null, worstId: worst?.id || null };
-  }, [recentOps]);
-
-  const simplifyReasonText = useCallback((text) => {
-    const fallback = ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase';
-    if (!text) return fallback;
-    const raw = String(text);
-
-    const avgMatch = raw.match(/(\d+(?:\.\d+)?)%\s*(below|above)\s*avg/i);
-    if (avgMatch) {
-      const pct = Math.round(Number(avgMatch[1]));
-      return avgMatch[2].toLowerCase() === 'below'
-        ? (ar ? `أقل من السعر المعتاد بـ ${pct}%` : `${pct}% below usual price`)
-        : (ar ? `أعلى من السعر المعتاد بـ ${pct}%` : `${pct}% above usual price`);
-    }
-
-    const cleaned = raw
-      .replace(/\s*\+\s*(Falling trend|Rising trend|Supplier prices are stable)/gi, '')
-      .replace(/^(Falling trend|Rising trend|Supplier prices are stable)\s*\+\s*/gi, '')
-      .trim();
-
-    return cleaned || fallback;
-  }, [ar]);
-
-  const normalizeDecisionLabel = useCallback((text) => {
-    const value = String(text || '').trim().toLowerCase();
-    if (value === 'buy now' || value === 'continue' || value === 'اشتر الآن') return 'مناسب';
-    if (value === 'watch' || value === 'راقب') return 'راقب';
-    if (value === 'do not buy' || value === 'لا تشتر') return 'مرتفع';
-    return text || 'مناسب';
-  }, []);
-
-  const supplierSummary = useMemo(() => {
-    if (!supplierRecommendations.length) return { best: null, worst: null };
-    const best = supplierRecommendations[0];
-    const worst = [...supplierRecommendations].sort((a, b) => Number(b.last) - Number(a.last))[0] || null;
-    return { best, worst };
-  }, [supplierRecommendations]);
-
-  const supplierDataQuality = useMemo(() => {
-    if (!supplierRecommendations.length) return { records: 0, vendors: 0 };
-    const records = supplierRecommendations.reduce((sum, s) => sum + (Number(s.sampleCount) || 0), 0);
-    return { records, vendors: supplierRecommendations.length };
-  }, [supplierRecommendations]);
-
-  const supplierQuickSummaryText = useMemo(() => {
-    if (!supplierRecommendations.length) return '';
-    const best = supplierSummary.best;
-    const worst = supplierSummary.worst;
-    const lines = [ar ? 'ملخص الموردين السريع' : 'Quick supplier summary'];
-    lines.push(ar ? `نطاق المقارنة: ${selectedFocusEntity}` : `Comparison scope: ${selectedFocusEntity}`);
-
-    if (best) {
-      lines.push(
-        ar
-          ? `الأفضل: ${best.vendor} بمتوسط ${formatSmartNumber(best.avg, 1)} ${t('currency')} عبر ${best.itemCount || 0} صنف`
-          : `Best: ${best.vendor} with ${formatSmartNumber(best.avg, 1)} ${t('currency')} average across ${best.itemCount || 0} items`
-      );
-    }
-    if (worst) {
-      lines.push(
-        ar
-          ? `الأعلى سعرا: ${worst.vendor} بمتوسط ${formatSmartNumber(worst.avg, 1)} ${t('currency')} عبر ${worst.itemCount || 0} صنف`
-          : `Highest: ${worst.vendor} with ${formatSmartNumber(worst.avg, 1)} ${t('currency')} average across ${worst.itemCount || 0} items`
-      );
-    }
-    if (best && worst && best.vendor !== worst.vendor) {
-      const supplierGap = Math.max(0, Number(worst.last || 0) - Number(best.last || 0));
-      lines.push(
-        ar
-          ? `فرق أفضل مورد: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
-          : `Best supplier gap: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
-      );
-    }
-    return lines.join('\n');
-  }, [supplierRecommendations, supplierSummary, ar, t, selectedFocusEntity]);
-
-  const handleCopySupplierSummary = useCallback(async () => {
-    if (!supplierQuickSummaryText) return;
-    try {
-      await navigator.clipboard.writeText(supplierQuickSummaryText);
-      setCopySummaryState('copied');
-      setTimeout(() => setCopySummaryState('idle'), 1800);
-    } catch {
-      setCopySummaryState('error');
-      setTimeout(() => setCopySummaryState('idle'), 1800);
-    }
-  }, [supplierQuickSummaryText]);
-
-  const simplifySupplierReason = useCallback((reason) => {
-    const text = String(reason || '').toLowerCase();
-    if (text.includes('below average') || text.includes('أرخص من المتوسط')) {
-      return ar ? 'أقل من السعر المعتاد' : 'Below usual price';
-    }
-    if (text.includes('above average') || text.includes('أعلى من المتوسط')) {
-      return ar ? 'أعلى من السعر المعتاد' : 'Above usual price';
-    }
-    if (text.includes('stable') || text.includes('مستقر')) {
-      return ar ? 'سعر مستقر' : 'Stable price';
-    }
-    return ar ? 'سعر ضمن النطاق المعتاد' : 'Within usual range';
-  }, [ar]);
-
-  const focusInsights = useMemo(() => {
-    if (!filteredOps.length) return [];
-
-    if (focusMode === 'all') {
-      return [];
-    }
-
-    const avgMap = (rows, keyField, valueField) => {
-      const map = {};
-      rows.forEach((p) => {
-        const key = p[keyField];
-        const val = cleanPriceValue(p[valueField]);
-        if (!key || val === null) return;
-        if (!map[key]) map[key] = [];
-        map[key].push(val);
-      });
-      return Object.entries(map).map(([key, vals]) => ({
-        key,
-        avg: vals.reduce((s, v) => s + v, 0) / vals.length,
-      }));
-    };
-
-    const vendors = avgMap(filteredOps, 'vendor', 'price').sort((a, b) => a.avg - b.avg);
-    const branches = avgMap(filteredOps, 'branch', 'price').sort((a, b) => a.avg - b.avg);
-    const items = avgMap(filteredOps, 'name', 'price').sort((a, b) => a.avg - b.avg);
-
-    if (focusMode === 'item') {
-      const bestVendor = vendors[0] || null;
-      const worstVendor = vendors[vendors.length - 1] || null;
-      const sameVendor = bestVendor && worstVendor && bestVendor.key === worstVendor.key;
-      const noMeaningfulVendorGap = bestVendor && worstVendor && Math.abs(bestVendor.avg - worstVendor.avg) < 0.01;
-      const bestBranch = branches[0] || null;
-      const worstBranch = branches[branches.length - 1] || null;
-      const sameBranch = bestBranch && worstBranch && bestBranch.key === worstBranch.key;
-      const noMeaningfulBranchGap = bestBranch && worstBranch && Math.abs(bestBranch.avg - worstBranch.avg) < 0.01;
-
-      return [
-        bestVendor
-          ? {
-            tone: 'good',
-            label: (sameVendor || noMeaningfulVendorGap)
-              ? (ar ? 'المورد الحالي لهذا الصنف' : 'Current Supplier for This Item')
-              : (ar ? 'أفضل مورد' : 'Best Supplier'),
-            text: `${bestVendor.key} (${formatSmartNumber(bestVendor.avg, 1)} ${t('currency')})`
-          }
-          : null,
-        worstVendor && !(sameVendor || noMeaningfulVendorGap)
-          ? { tone: 'bad', label: ar ? 'أعلى مورد' : 'Highest Supplier', text: `${worstVendor.key} (${formatSmartNumber(worstVendor.avg, 1)} ${t('currency')})` }
-          : null,
-        bestBranch
-          ? {
-            tone: 'good',
-            label: (sameBranch || noMeaningfulBranchGap)
-              ? (ar ? 'الفرع الحالي لهذا الصنف' : 'Current Branch for This Item')
-              : (ar ? 'أفضل فرع' : 'Best Branch'),
-            text: `${bestBranch.key} (${formatSmartNumber(bestBranch.avg, 1)} ${t('currency')})`
-          }
-          : null,
-        worstBranch && !(sameBranch || noMeaningfulBranchGap)
-          ? { tone: 'bad', label: ar ? 'أسوأ فرع' : 'Worst Branch', text: `${worstBranch.key} (${formatSmartNumber(worstBranch.avg, 1)} ${t('currency')})` }
-          : null,
-      ].filter(Boolean).slice(0, 4);
-    }
-
-    if (focusMode === 'supplier') {
-      const uniqueItems = Array.from(new Set(filteredOps.map((p) => p.code || p.name).filter(Boolean)));
-      const prices = filteredOps
-        .map((p) => cleanPriceValue(p.price))
-        .filter((v) => v !== null)
-        .sort((a, b) => a - b);
-      const minPrice = prices.length ? prices[0] : null;
-      const maxPrice = prices.length ? prices[prices.length - 1] : null;
-      const singleItem = filteredOps.find((p) => p.name || p.code) || null;
-      const singleItemLabel = singleItem
-        ? (singleItem.name || (ar ? 'الصنف الحالي' : 'Current item'))
-        : (ar ? 'الصنف الحالي' : 'Current item');
-      const bestBranch = branches[0] || null;
-      const worstBranch = branches[branches.length - 1] || null;
-      const sameBranch = bestBranch && worstBranch && bestBranch.key === worstBranch.key;
-      const noMeaningfulBranchGap = bestBranch && worstBranch && Math.abs(bestBranch.avg - worstBranch.avg) < 0.01;
-
-      return [
-        uniqueItems.length > 1
-          ? (items[0]
-            ? { tone: 'good', label: ar ? 'أرخص صنف' : 'Cheapest Item', text: `${items[0].key} (${formatSmartNumber(items[0].avg, 1)} ${t('currency')})` }
-            : null)
-          : (minPrice !== null
-            ? { tone: 'good', label: ar ? 'أقل سعر تم الشراء به' : 'Lowest Purchased Price', text: `${singleItemLabel}: ${formatSmartNumber(minPrice, 1)} ${t('currency')}` }
-            : null),
-        uniqueItems.length > 1
-          ? (items[items.length - 1]
-            ? { tone: 'bad', label: ar ? 'أغلى صنف' : 'Most Expensive Item', text: `${items[items.length - 1].key} (${formatSmartNumber(items[items.length - 1].avg, 1)} ${t('currency')})` }
-            : null)
-          : (maxPrice !== null
-            ? { tone: 'bad', label: ar ? 'أعلى سعر تم الشراء به' : 'Highest Purchased Price', text: `${singleItemLabel}: ${formatSmartNumber(maxPrice, 1)} ${t('currency')}` }
-            : null),
-        bestBranch
-          ? {
-            tone: 'good',
-            label: (sameBranch || noMeaningfulBranchGap)
-              ? (ar ? 'الفرع الحالي لهذا المورد' : 'Current Branch for This Supplier')
-              : (ar ? 'أفضل فرع اشترى من هذا المورد' : 'Best Branch for This Supplier'),
-            text: `${bestBranch.key} (${formatSmartNumber(bestBranch.avg, 1)} ${t('currency')})`
-          }
-          : null,
-        worstBranch && !(sameBranch || noMeaningfulBranchGap)
-          ? { tone: 'bad', label: ar ? 'أسوأ فرع اشترى من هذا المورد' : 'Worst Branch for This Supplier', text: `${worstBranch.key} (${formatSmartNumber(worstBranch.avg, 1)} ${t('currency')})` }
-          : null,
-      ].filter(Boolean).slice(0, 4);
-    }
-
-    const uniqueItems = Array.from(new Set(filteredOps.map((p) => p.code || p.name).filter(Boolean)));
-    const prices = filteredOps
-      .map((p) => cleanPriceValue(p.price))
-      .filter((v) => v !== null)
-      .sort((a, b) => a - b);
-    const minPrice = prices.length ? prices[0] : null;
-    const maxPrice = prices.length ? prices[prices.length - 1] : null;
-    const singleItem = filteredOps.find((p) => p.name || p.code) || null;
-    const singleItemLabel = singleItem
-      ? (singleItem.name || (ar ? 'الصنف الحالي' : 'Current item'))
-      : (ar ? 'الصنف الحالي' : 'Current item');
-    const bestVendor = vendors[0] || null;
-    const worstVendor = vendors[vendors.length - 1] || null;
-    const sameVendor = bestVendor && worstVendor && bestVendor.key === worstVendor.key;
-    const noMeaningfulVendorGap = bestVendor && worstVendor && Math.abs(bestVendor.avg - worstVendor.avg) < 0.01;
-
-    return [
-      uniqueItems.length > 1
-        ? (items[items.length - 1]
-          ? { tone: 'bad', label: ar ? 'أغلى صنف يشتريه الفرع' : 'Most Expensive Item in Branch', text: `${items[items.length - 1].key} (${formatSmartNumber(items[items.length - 1].avg, 1)} ${t('currency')})` }
-          : null)
-        : (maxPrice !== null
-          ? { tone: 'bad', label: ar ? 'أعلى سعر اشترى به الفرع' : 'Highest Purchased Price in Branch', text: `${singleItemLabel}: ${formatSmartNumber(maxPrice, 1)} ${t('currency')}` }
-          : null),
-      uniqueItems.length > 1
-        ? (items[0]
-          ? { tone: 'good', label: ar ? 'أرخص صنف يشتريه الفرع' : 'Cheapest Item in Branch', text: `${items[0].key} (${formatSmartNumber(items[0].avg, 1)} ${t('currency')})` }
-          : null)
-        : (minPrice !== null
-          ? { tone: 'good', label: ar ? 'أقل سعر اشترى به الفرع' : 'Lowest Purchased Price in Branch', text: `${singleItemLabel}: ${formatSmartNumber(minPrice, 1)} ${t('currency')}` }
-          : null),
-      worstVendor && !(sameVendor || noMeaningfulVendorGap)
-        ? { tone: 'bad', label: ar ? 'أسوأ مورد لهذا الفرع' : 'Worst Supplier for This Branch', text: `${worstVendor.key} (${formatSmartNumber(worstVendor.avg, 1)} ${t('currency')})` }
-        : null,
-      bestVendor
-        ? {
-          tone: 'good',
-          label: (sameVendor || noMeaningfulVendorGap)
-            ? (ar ? 'المورد الحالي لهذا الفرع' : 'Current Supplier for This Branch')
-            : (ar ? 'أفضل مورد لهذا الفرع' : 'Best Supplier for This Branch'),
-          text: `${bestVendor.key} (${formatSmartNumber(bestVendor.avg, 1)} ${t('currency')})`
-        }
-        : null,
-    ].filter(Boolean).slice(0, 4);
-  }, [filteredOps, focusMode, ar, t]);
-
-  const periodOptions = [
-    { key: 'realtime', ar: 'حتى الآن', en: 'Until now' },
-    { key: 'weekly', ar: 'أسبوعي', en: 'Weekly' },
-    { key: 'monthly', ar: 'شهري', en: 'Monthly' },
-    { key: 'custom', ar: 'مخصص', en: 'Custom' },
-  ];
-  const focusModeOptions = [
-    { key: 'item', ar: 'حسب الصنف', en: 'By item' },
-    { key: 'supplier', ar: 'حسب المورد', en: 'By supplier' },
-    { key: 'branch', ar: 'حسب الفرع', en: 'By branch' },
-    { key: 'all', ar: 'الكل', en: 'All' },
-  ];
-  const activePeriodLabel = (ar ? periodOptions.find((opt) => opt.key === timeFilter)?.ar : periodOptions.find((opt) => opt.key === timeFilter)?.en) || timeFilter;
-  const activeFocusLabel = (ar ? focusModeOptions.find((opt) => opt.key === focusMode)?.ar : focusModeOptions.find((opt) => opt.key === focusMode)?.en) || focusMode;
-  const dashboardKpis = [
-    {
-      key: 'spend',
-      title: ar ? 'إجمالي المشتريات' : 'Total Purchases',
-      val: formatSmartNumber(periodStats.totalSpend, 0),
-      unit: 'SAR',
-      icon: <ShoppingCart size={18}/>,
-      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(77,110,157,0.08),transparent_55%)] before:pointer-events-none',
-    },
-    {
-      key: 'ops',
-      title: ar ? 'عدد الفواتير' : 'Invoices',
-      val: formatSmartNumber(periodStats.totalOps, 0),
-      unit: ar ? 'فاتورة' : 'Invoices',
-      icon: <FileText size={18}/>,
-      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(100,116,139,0.09),transparent_55%)] before:pointer-events-none',
-    },
-    {
-      key: 'savings',
-      title: ar ? 'إجمالي التوفير' : 'Total Savings',
-      val: formatSmartNumber(periodStats.totalSavings, 0),
-      unit: 'SAR',
-      icon: <CheckCircle size={18}/>,
-      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(47,107,86,0.10),transparent_55%)] before:pointer-events-none',
-    },
-    {
-      key: 'avgInvoice',
-      title: ar ? 'متوسط الفاتورة' : 'Average Invoice',
-      val: formatSmartNumber(periodStats.averageInvoiceValue, 0),
-      unit: 'SAR',
-      icon: <Wallet size={18}/>,
-      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(75,95,133,0.09),transparent_55%)] before:pointer-events-none',
-    },
-  ];
-return (
-  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-
-    <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
-      <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
-      <div className="relative z-10 flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-4">
-
-        <div className="min-w-0 space-y-3">
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="erp-subtle-chip"><CalendarDays size={13} /> {activePeriodLabel}</span>
-            <span className="erp-subtle-chip"><Filter size={13} /> {activeFocusLabel}</span>
-          </div>
-
-          <div className="min-w-0">
-            <h2 className="text-fluid-xl font-black text-slate-900">
-              {ar ? 'تحليل المشتريات' : 'Purchasing Insights'}
-            </h2>
-            <p className="mt-1 text-fluid-sm text-slate-500 max-w-3xl">
-              {decisionBasisText}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
-            <span className="erp-subtle-chip">
-              {ar ? 'النطاق' : 'Scope'}: {selectedFocusEntity}
-            </span>
-
-            <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-bold ${
-              marketStatus.key === 'falling'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : marketStatus.key === 'rising'
-                ? 'border-red-200 bg-red-50 text-red-700'
-                : 'border-slate-200 bg-white text-slate-600'
-            }`}>
-              {marketStatus.key === 'falling'
-                ? <TrendingDown size={12}/>
-                : marketStatus.key === 'rising'
-                ? <TrendingUp size={12}/>
-                : <Activity size={12}/>}
-
-              {marketStatus.label}
-            </span>
-          </div>
-
-        </div>
-
-        <div className="laptop:max-w-[340px] space-y-2">
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-              {ar ? 'تنبيهات' : 'Alerts'}
-            </p>
-
-            <p className="mt-2 text-sm font-semibold text-slate-800">
-              {marketStatus.hint}
-            </p>
-
-            {actionAlerts.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {actionAlerts.map((note, index) => (
-                  <div key={`${note}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[12px] font-medium text-slate-600">
-                    {note}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs font-medium text-slate-500">
-                {ar ? 'لا توجد تنبيهات حالياً' : 'No alerts at the moment'}
-              </p>
-            )}
-
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    {!timeScopedOps.length && (
-      <div className="elevated-card p-6 text-center bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
-        <p className="text-sm font-semibold text-slate-700">
-          {ar ? 'لا توجد بيانات حالياً' : 'No data available'}
-        </p>
-      </div>
-    )}
-
-      <div className="grid grid-cols-1 phone:grid-cols-2 laptop:grid-cols-4 gap-3">
-        {dashboardKpis.map((card) => (
-          <StatCard key={card.key} title={card.title} val={card.val} unit={card.unit} icon={card.icon} color={card.color} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 laptop:grid-cols-[1.6fr_1fr] gap-3">
-     {/* ===== شريط الأدوات الجانبي - يعرض مؤشرات الحالة وملخص الموردين ===== */}
-<div className="erp-toolbar p-4 md:p-5">
-  {/* عنوان القسم */}
-  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-    {ar ? 'مؤشرات الحالة' : 'Status metrics'}
-  </p>
-
-  {/* شارات الحالة: مناسب / راقب / مرتفع */}
-  <div className="mt-3 flex flex-wrap gap-2">
-    <span className="status-good text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-      <CheckCircle size={12} />
-      {periodStats.gradeCount.good} {ar ? 'مناسب' : 'Suitable'}
-    </span>
-    <span className="status-watch text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-      <AlertTriangle size={12} />
-      {periodStats.gradeCount.ok} {ar ? 'راقب' : 'Monitor'}
-    </span>
-    <span className="status-high text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-      <AlertCircle size={12} />
-      {periodStats.gradeCount.bad} {ar ? 'مرتفع' : 'High'}
-    </span>
-  </div>
-
-  {/* بطاقتا: المورد المرجعي وجودة التحليل */}
-  <div className="mt-4 space-y-2">
-
-    {/* بطاقة المورد المرجعي - يعرض أفضل مورد ومتوسط أسعاره */}
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-        {ar ? 'المورد المرجعي' : 'Reference supplier'}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-slate-800">
-        {supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}
-      </p>
-      {/* يظهر فقط إذا توفر بيانات لأفضل مورد */}
-      {supplierSummary.best && (
-        <p className="mt-1 text-[11px] font-medium text-slate-500">
-          {ar
-            ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
-            : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
-        </p>
-      )}
-    </div>
-
-    {/* بطاقة جودة التحليل - عدد السجلات والموردين المحللين */}
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-        {ar ? 'جودة التحليل' : 'Analysis quality'}
-      </p>
-      <p className="mt-1 text-sm font-semibold text-slate-800">
-        {ar
-          ? `${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
-          : `${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
-      </p>
-    </div>
-
-  </div>
-</div>
-
-
-{/* ===== قسم الرؤى الإضافية - يظهر فقط عند توفر بيانات ===== */}
-{focusInsights.length > 0 && (
-  <>
-    {/* عرض الرؤى في شبكة على الشاشات المتوسطة وما فوق */}
-    <div className="hidden phone:grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-2">
-      {focusInsights.map((x, idx) => (
-        <div
-          key={`${x.label}-${idx}`}
-          className={`rounded-xl border px-3 py-2 ${
-            x.tone === 'good'
-              ? 'border-emerald-200 bg-emerald-50/50'
-              : 'border-red-200 bg-red-50/50'
-          }`}
-        >
-          {/* عنوان الرؤية */}
-          <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>
-            {x.label}
-          </p>
-          {/* نص الرؤية */}
-          <p className="text-sm font-black text-slate-800 break-words">{x.text}</p>
-        </div>
-      ))}
-    </div>
-
-    {/* عرض الرؤى قابلة للطي على الشاشات الصغيرة (موبايل) */}
-    <div className="phone:hidden elevated-card p-3">
-      <button
-        type="button"
-        onClick={() => setShowSecondaryInsights((v) => !v)}
-        className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
-      >
-        <span>{ar ? 'تفاصيل إضافية' : 'More Insights'}</span>
-        {/* أيقونة السهم تتعكس عند الفتح */}
-        <ChevronDown
-          size={16}
-          className={`transition-transform ${showSecondaryInsights ? 'rotate-180' : ''}`}
-        />
-      </button>
-
-      {/* المحتوى المطوي - يظهر عند الضغط على الزر */}
-      {showSecondaryInsights && (
-        <div className="mt-2 space-y-2">
-          {focusInsights.map((x, idx) => (
-            <div
-              key={`${x.label}-${idx}`}
-              className={`rounded-lg border px-3 py-2 ${
-                x.tone === 'good'
-                  ? 'border-emerald-200 bg-emerald-50/50'
-                  : 'border-red-200 bg-red-50/50'
-              }`}
-            >
-              <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>
-                {x.label}
-              </p>
-              <p className="text-sm font-semibold text-slate-800 break-words">{x.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </>
-)}
-
-
-{/* ===== بطاقة ترشيحات الموردين الرئيسية ===== */}
-<div className="elevated-card p-4 phone:p-5 md:p-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.98))]">
-
-  {/* رأس البطاقة: العنوان + أزرار الإجراءات */}
-  <div className="flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-3 mb-1">
-
-    {/* أيقونة وعنوان القسم */}
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <div className="w-9 h-9 rounded-xl bg-[linear-gradient(135deg,#e8f0fb_0%,#dae6f5_100%)] text-[#4d6e9d] grid place-items-center ring-1 ring-slate-200">
-          <Award size={17} />
-        </div>
-        <div className="min-w-0">
-          <h3 className="font-black text-slate-900">
-            {ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}
-          </h3>
-          <p className="text-[11px] font-medium text-slate-500 mt-0.5">
-            {supplierComparisonScopeText}
-          </p>
-        </div>
-      </div>
-    </div>
-
-    {/* شارة فرق السعر بين أفضل وأسوأ مورد + زر نسخ الملخص */}
-    <div className="flex flex-wrap items-center gap-2">
-      {/* تظهر الشارة فقط إذا كان هناك موردان مختلفان */}
-      {supplierSummary.best &&
-        supplierSummary.worst &&
-        supplierSummary.best.vendor !== supplierSummary.worst.vendor && (
-          <span className="erp-subtle-chip">
-            <Award size={12} />
-            {ar
-              ? `فرق أفضل مورد: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`
-              : `Best supplier gap: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`}
-          </span>
-        )}
-
-      {/* زر نسخ ملخص الموردين للحافظة */}
-      <button
-        type="button"
-        onClick={handleCopySupplierSummary}
-        disabled={!supplierQuickSummaryText}
-        className="btn-surface inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 disabled:opacity-40"
-        title={ar ? 'نسخ ملخص الموردين' : 'Copy supplier summary'}
-      >
-        <Copy size={13} />
-        {ar ? 'نسخ الملخص' : 'Copy summary'}
-      </button>
-    </div>
-  </div>
-
-  {/* رسالة حالة النسخ: نجاح أو فشل */}
-  {copySummaryState !== 'idle' && (
-    <p className={`text-[10px] font-black mb-2 ${
-      copySummaryState === 'copied' ? 'text-emerald-700' : 'text-red-700'
-    }`}>
-      {copySummaryState === 'copied'
-        ? (ar ? 'تم نسخ الملخص بنجاح' : 'Summary copied successfully')
-        : (ar ? 'تعذر نسخ الملخص' : 'Failed to copy summary')}
-    </p>
-  )}
-
-  {/* منطقة المحتوى: ملخص القرار + بطاقات الموردين */}
-  <div className="mt-3 grid grid-cols-1 laptop:grid-cols-[1.2fr_2fr] gap-3">
-
-    {/* العمود الأيسر: ملخص القرار وجودة البيانات */}
-    <div className="erp-toolbar p-4 space-y-3">
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-          {ar ? 'ملخص القرار' : 'Decision summary'}
-        </p>
-        {/* شرح منهجية الترتيب */}
-        <p className="mt-2 text-sm font-semibold text-slate-700">
-          {ar
-            ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.'
-            : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}
-        </p>
-      </div>
-
-      {/* تفاصيل جودة البيانات ونطاق المقارنة */}
-      <div className="space-y-2 text-[11px] font-semibold text-slate-600">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-          {ar
-            ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
-            : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-          {supplierComparisonScopeText}
-        </div>
-
-        {/* شارتا أفضل وأعلى المورّدين سعراً */}
-        {supplierSummary.best && supplierSummary.worst && (
-          <div className="flex flex-col gap-2">
-            <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
-              <CheckCircle size={12} />
-              {ar
-                ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)`
-                : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
-            </span>
-            <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
-              <AlertCircle size={12} />
-              {ar
-                ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)`
-                : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-
-    {/* العمود الأيمن: شبكة بطاقات الموردين المرشّحين (بحد أقصى 5 موردين) */}
-    <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-3">
-      {supplierRecommendations.slice(0, 5).map((s, idx) => (
-        <div
-          key={s.vendor}
-          className={`rounded-[20px] border px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] ${
-            idx === 0
-              ? 'border-emerald-300 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(229,248,238,0.98))]' // بطاقة الترشيح الأول بلون أخضر مميز
-              : !s.aboveAvg
-                ? 'border-emerald-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,250,245,0.98))]' // مورد ضمن النطاق الجيد
-                : 'border-slate-200 bg-white' // مورد أعلى من المتوسط
-          }`}
-        >
-          {/* رأس بطاقة المورد: الاسم + الأيقونة */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              {/* شارة "الترشيح الأول" تظهر فقط للمورد الأول */}
-              {idx === 0 && (
-                <span className="status-good inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-black">
-                  {ar ? 'الترشيح الأول' : 'Top pick'}
-                </span>
-              )}
-              <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
-              <p className="text-[11px] font-bold text-slate-500 mt-1">
-                {ar
-                  ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف`
-                  : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
-              </p>
-            </div>
-            {/* أيقونة الجائزة للأول، وأيقونة المتجر للبقية */}
-            <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
-              idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              {idx === 0 ? <Award size={16} /> : <Store size={16} />}
-            </div>
-          </div>
-
-          {/* تفاصيل السعر: آخر سعر شراء، متوسط الفترة، نطاق المقارنة */}
-          <div className="mt-4 space-y-2.5">
-
-            {/* آخر سعر شراء مع اسم الصنف والفرع */}
-            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {ar ? 'آخر سعر شراء' : 'Last purchase price'}
-              </p>
-              <p className="mt-1 text-base font-black text-slate-900">
-                {formatSmartNumber(s.last, 1)}{' '}
-                <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span>
-              </p>
-              {/* معلومات إضافية: اسم الصنف والفرع إن وُجدا */}
-              {(s.latestItemName || s.latestBranch) && (
-                <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
-                  {ar
-                    ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
-                    : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
-                </p>
-              )}
-            </div>
-
-            {/* متوسط الفترة الزمنية المحددة */}
-            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {ar ? 'متوسط الفترة' : 'Period average'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">
-                {formatSmartNumber(s.avg, 1)} {t('currency')}
-              </p>
-            </div>
-
-            {/* نطاق المقارنة: عدد الفروع والأصناف المشمولة */}
-            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {ar ? 'نطاق المقارنة' : 'Comparison scope'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-800 break-words">
-                {supplierComparisonScopeText}
-              </p>
-              <p className="mt-1 text-[11px] font-medium text-slate-500">
-                {ar
-                  ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
-                  : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
-              </p>
-            </div>
-          </div>
-
-          {/* شارة التقييم: ضمن النطاق الجيد أو أعلى من المتوسط */}
-          <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${
-            !s.aboveAvg ? 'status-good' : 'status-high'
-          }`}>
-            {!s.aboveAvg
-              ? (<><CheckCircle size={12} />{ar ? 'ضمن النطاق الجيد' : 'Within a good range'}</>)
-              : (<><AlertCircle size={12} />{ar ? 'أعلى من متوسط الفترة' : 'Above period average'}</>)}
-          </span>
-
-          {/* سبب الترشيح مبسّطاً */}
-          <p className={`text-xs font-bold mt-3 break-words ${s.aboveAvg ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {simplifySupplierReason(s.reason)}
-          </p>
-        </div>
-      ))}
-
-      {/* رسالة فارغة عند غياب بيانات كافية */}
-      {supplierRecommendations.length === 0 && (
-        <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
-          {ar
-            ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي'
-            : 'Recommendations appear once enough data exists in the current filter'}
-        </div>
-      )}
-    </div>
-
-  </div>
-</div>
-
-
-{/* ===== جدول آخر العمليات - مقارنة الأسعار مع آخر شراء ===== */}
-<div className="elevated-card overflow-hidden">
-
-  {/* رأس الجدول */}
-  <div className="px-4 md:px-6 py-4 border-b border-slate-100 flex items-start gap-2">
-    <Activity size={17} className="text-slate-600 mt-0.5 shrink-0" />
-    <div>
-      <h3 className="font-black text-slate-800">{ar ? 'آخر العمليات' : 'Latest Operations'}</h3>
-      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-        {ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase'}
-      </p>
-    </div>
-  </div>
-
-  {/*
-    مكوّن DataTable:
-    - يعالج كل صف بتوحيد تسمية القرار والسبب
-    - يميّز أفضل وأسوأ عملية بألوان مختلفة
-    - يدعم الترتيب والتصفح بين الصفحات
-  */}
-  <DataTable
-    data={recentOps.map((p) => {
-      // استخراج تسمية القرار حسب اللغة مع احتياطي للدرجة
-      const rawDecision = ar
-        ? (p.decisionAr || p.decisionEn || getDecisionLabelByGrade(p.grade))
-        : (p.decisionEn || p.decisionAr || getDecisionLabelByGrade(p.grade));
-      const dec = normalizeDecisionLabel(rawDecision);
-
-      // استخراج سبب القرار حسب اللغة وتبسيطه
-      const sourceReason = ar ? (p.reasonAr || p.reasonEn) : (p.reasonEn || p.reasonAr);
-      const reason = simplifyReasonText(sourceReason);
-
-      // تحديد إذا كانت هذه العملية هي الأفضل أو الأسوأ في الفترة
-      const isBest = p.id === bestWorst.bestId;
-      const isWorst = p.id === bestWorst.worstId;
-
-      return { ...p, dec, reason, isBest, isWorst };
-    })}
-
-    columns={[
-      { key: 'vendor',  label: t('vendor'), sortable: true },
-      { key: 'name',    label: t('item'),   sortable: true },
-
-      // عمود السعر: قيمة بارزة باللون الأزرق
-      {
-        key: 'price',
-        label: t('price'),
-        sortable: true,
-        render: (val) => (
-          <span className="font-black text-blue-700">
-            {formatSmartNumber(val, 2)} {t('currency')}
-          </span>
-        ),
-      },
-
-      // عمود الدرجة: شارة ملونة + علامة أفضل/أسوأ
-      {
-        key: 'grade',
-        label: t('grade'),
-        sortable: true,
-        render: (val, row) => (
-          <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-black px-2 py-1 rounded-full border ${
-              val === 'A' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-              : val === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
-              : 'bg-red-100 text-red-700 border-red-200'
-            }`}>
-              {row.dec}
-            </span>
-            {row.isBest  && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">{ar ? 'أفضل' : 'Best'}</span>}
-            {row.isWorst && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">{ar ? 'أضعف' : 'Worst'}</span>}
-          </div>
-        ),
-      },
-
-      // عمود القرار: نص السبب المبسّط
-      {
-        key: 'reason',
-        label: t('decision'),
-        sortable: false,
-        render: (val) => <span className="font-bold text-slate-600">{val}</span>,
-      },
-    ]}
-
-    /* تلوين خلفية صفوف أفضل وأسوأ عملية */
-    highlightRows={{
-      [bestWorst.bestId]:  { className: 'bg-emerald-50/60 border-emerald-100' },
-      [bestWorst.worstId]: { className: 'bg-red-50/60 border-red-100' },
-    }}
-
-    pageSize={10}
-    isRTL={ar}
-    emptyMessage={ar ? 'لا توجد عمليات حديثة' : 'No recent operations'}
-
-    /* تخطيط مخصص للموبايل: عرض مدمج بدلاً من جدول */
-    renderRow={(row) => (
-      <div className={`px-4 py-3 ${row.isBest ? 'bg-emerald-50/60' : row.isWorst ? 'bg-red-50/60' : ''}`}>
-
-        {/* السطر الأول: اسم الصنف + المورد + السعر */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-black text-slate-900 break-words leading-snug">{row.name || '—'}</p>
-            <p className="text-xs font-bold text-slate-500 break-words leading-snug">{row.vendor || '—'}</p>
-          </div>
-          <p className="font-black text-blue-700 text-sm">{formatSmartNumber(row.price, 2)}</p>
-        </div>
-
-        {/* السطر الثاني: شارة الدرجة + سبب القرار */}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className={`text-[11px] font-black px-2 py-1 rounded-full border ${
-              row.grade === 'A' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-              : row.grade === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
-              : 'bg-red-100 text-red-700 border-red-200'
-            }`}>
-              {row.dec}
-            </span>
-            {row.isBest  && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">{ar ? 'أفضل' : 'Best'}</span>}
-            {row.isWorst && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">{ar ? 'أضعف' : 'Worst'}</span>}
-          </div>
-          <p className="text-xs font-bold text-slate-500 break-words text-right">{row.reason}</p>
-        </div>
-
-      </div>
-    )}
-  />
-</div>
-
+  const ar = lang === 'ar';
+  const sourcePurchases = isActive ? purchases : EMPTY_LIST;
+  const [focusMode, setFocusMode] = useState(initialFilters?.focusMode || 'item');
+  const [selectedItemCode, setSelectedItemCode] = useState(initialFilters?.selectedItemCode || '');
+  const [selectedSupplier, setSelectedSupplier] = useState(initialFilters?.selectedSupplier || '');
+  const [selectedBranch, setSelectedBranch] = useState(initialFilters?.selectedBranch || '');
+  const [copySummaryState, setCopySummaryState] = useState('idle');
+  const [showSecondaryInsights, setShowSecondaryInsights] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DASHBOARD_FILTERS_KEY,
+        JSON.stringify({
+          timeFilter,
+          focusMode,
+          selectedItemCode,
+          selectedSupplier,
+          selectedBranch,
+          customFrom,
+          customTo,
+        })
+      );
+    } catch {
+      // Ignore storage errors silently.
+    }
+  }, [timeFilter, focusMode, selectedItemCode, selectedSupplier, selectedBranch, customFrom, customTo]);
+
+  const enriched = useMemo(
+    () => (isActive ? (enrichedPurchases || enrichPurchasesWithScores(sourcePurchases, settings)) : EMPTY_LIST),
+    [isActive, enrichedPurchases, sourcePurchases, settings]
+  );
+
+  const sortedRecentAll = useMemo(() =>
+    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
+  [enriched]);
+
+  const timeScopedOps = useMemo(() => {
+    if (!sortedRecentAll.length) return [];
+    const now = new Date();
+    const nowTs = now.getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    if (timeFilter === 'realtime') {
+      return sortedRecentAll;
+    }
+
+    if (timeFilter === 'weekly' || timeFilter === 'monthly') {
+      const spanDays = timeFilter === 'weekly' ? 7 : 30;
+      const cutoff = nowTs - (spanDays * dayMs);
+      const list = sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
+      return list.length ? list : sortedRecentAll.slice(0, 20);
+    }
+
+    const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
+    const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : nowTs;
+    const list = sortedRecentAll.filter((p) => {
+      const ts = getRecordTimestamp(p);
+      return ts >= fromTs && ts <= toTs;
+    });
+    return list.length ? list : sortedRecentAll.slice(0, 20);
+  }, [sortedRecentAll, timeFilter, customFrom, customTo]);
+
+  const decisionBasisText = useMemo(() => {
+    if (timeFilter === 'realtime') return ar ? 'حسب كل العمليات حتى الآن' : 'Based on all operations until now';
+    if (timeFilter === 'weekly') return ar ? 'حسب آخر 7 أيام' : 'Based on last 7 days';
+    if (timeFilter === 'monthly') return ar ? 'حسب آخر 30 يوم' : 'Based on last 30 days';
+    return ar ? 'حسب الفترة المختارة' : 'Based on selected period';
+  }, [timeFilter, ar]);
+
+  const selectedValue = useMemo(() => {
+    if (focusMode === 'all') return '';
+    if (focusMode === 'supplier') return selectedSupplier || '';
+    if (focusMode === 'branch') return selectedBranch || '';
+    return selectedItemCode || '';
+  }, [focusMode, selectedSupplier, selectedBranch, selectedItemCode]);
+
+  const filteredOps = useMemo(() => {
+    if (!timeScopedOps.length) return [];
+    if (focusMode === 'all') return timeScopedOps;
+    if (!selectedValue) return timeScopedOps;
+    if (focusMode === 'supplier') return timeScopedOps.filter((p) => p.vendor === selectedValue);
+    if (focusMode === 'branch') return timeScopedOps.filter((p) => p.branch === selectedValue);
+    return timeScopedOps.filter((p) => p.code === selectedValue);
+  }, [timeScopedOps, selectedValue, focusMode]);
+
+  const focusOptions = useMemo(() => {
+    if (focusMode === 'all') return [];
+    if (focusMode === 'supplier') {
+      return Array.from(new Set(timeScopedOps.map((p) => p.vendor).filter(Boolean))).map((x) => ({ value: x, label: x }));
+    }
+    if (focusMode === 'branch') {
+      return Array.from(new Set(timeScopedOps.map((p) => p.branch).filter(Boolean))).map((x) => ({ value: x, label: x }));
+    }
+    const byCode = {};
+    timeScopedOps.forEach((p) => {
+      if (!p.code) return;
+      if (!byCode[p.code]) byCode[p.code] = p.name || p.code;
+    });
+    return Object.entries(byCode).map(([code, name]) => ({ value: code, label: `${name} (#${code})` }));
+  }, [focusMode, timeScopedOps]);
+
+  const selectedFocusEntity = useMemo(() => {
+    if (focusMode === 'all' || !selectedValue) return ar ? 'كل البيانات ضمن الفلتر' : 'All records in this filter';
+    if (focusMode === 'supplier' || focusMode === 'branch') return selectedValue;
+    return focusOptions.find((opt) => opt.value === selectedValue)?.label || selectedValue;
+  }, [focusMode, ar, selectedValue, focusOptions]);
+
+  const currentItemPrices = useMemo(() => {
+    if (focusMode !== 'item' || !selectedValue) return [];
+    return [...filteredOps]
+      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .map((p) => cleanPriceValue(p.price))
+      .filter((v) => v !== null);
+  }, [filteredOps, focusMode, selectedValue]);
+
+  const recentOps = useMemo(() => filteredOps.slice(0, 5), [filteredOps]);
+
+  const itemAveragePrice = useMemo(() => {
+    if (currentItemPrices.length < 2) return null;
+    const filtered = filterOutliers(currentItemPrices);
+    if (!filtered.length) return null;
+    return filtered.reduce((s, v) => s + v, 0) / filtered.length;
+  }, [currentItemPrices]);
+
+  const itemLastPrice = useMemo(() => {
+    if (!currentItemPrices.length) return null;
+    return currentItemPrices[currentItemPrices.length - 1];
+  }, [currentItemPrices]);
+
+  const marketStatus = useMemo(() => {
+    const prices = currentItemPrices.slice(-6);
+    if (prices.length >= 3) {
+      const rising = prices.every((v, i) => i === 0 || v >= prices[i - 1] * 0.99);
+      const falling = prices.every((v, i) => i === 0 || v <= prices[i - 1] * 1.01);
+
+      if (rising) return { key: 'rising', label: ar ? 'صاعد' : 'Rising', hint: ar ? 'السعر يرتفع ضمن الصنف المحدد' : 'Price is rising for the selected item' };
+      if (falling) return { key: 'falling', label: ar ? 'هابط' : 'Falling', hint: ar ? 'السعر ينخفض ضمن الصنف المحدد' : 'Price is falling for the selected item' };
+      return { key: 'volatile', label: ar ? 'متذبذب' : 'Volatile', hint: ar ? 'السعر غير ثابت ضمن الصنف المحدد' : 'Price is unstable for the selected item' };
+    }
+
+      const total = filteredOps.length;
+      if (!total) return { key: 'stable', label: ar ? 'متوازن' : 'Balanced', hint: ar ? 'ملخص عام حسب الفلتر المحدد' : 'Overall summary based on the selected filter' };
+
+      let riskyCount = 0;
+      let goodCount = 0;
+      filteredOps.forEach((p) => {
+        const grade = String(p.grade || '').toUpperCase();
+        if (grade === 'A' || grade === 'A+') goodCount += 1;
+        else if (grade === 'C' || grade === 'D') riskyCount += 1;
+      });
+
+      const riskyShare = riskyCount / total;
+      const goodShare = goodCount / total;
+
+    if (riskyShare >= 0.3) return { key: 'rising', label: ar ? 'ضغط سعري' : 'Price pressure', hint: ar ? 'النتائج الحالية تحتاج مراجعة أكبر' : 'Current results need closer review' };
+    if (goodShare >= 0.6) return { key: 'falling', label: ar ? 'أداء جيد' : 'Healthy performance', hint: ar ? 'المشتريات ضمن نطاق جيد في هذه الفترة' : 'Purchasing is performing well in this period' };
+    return { key: 'volatile', label: ar ? 'نتائج مختلطة' : 'Mixed results', hint: ar ? 'النتائج تحتاج قراءة تفصيلية حسب المورد أو الصنف' : 'Results need deeper review by supplier or item' };
+  }, [currentItemPrices, filteredOps, ar]);
+
+  const supplierRecommendations = useMemo(() => {
+    if (!filteredOps.length) return [];
+
+    const grouped = {};
+    filteredOps.forEach((p) => {
+      const price = cleanPriceValue(p.price);
+      if (!p.vendor || price === null) return;
+      if (!grouped[p.vendor]) grouped[p.vendor] = [];
+      grouped[p.vendor].push({
+        price,
+        timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0),
+        name: p.name,
+        code: p.code,
+        branch: p.branch,
+      });
+    });
+
+    const avgAll = itemAveragePrice || 0;
+
+    return Object.entries(grouped)
+      .map(([vendor, rows]) => {
+        const prices = rows.map((r) => r.price);
+        if (!prices.length) return null;
+
+        const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
+        const sortedByTime = [...rows].sort((a, b) => b.timestamp - a.timestamp);
+        const latestRow = sortedByTime[0] || null;
+        const last = latestRow?.price || avg;
+        const variance = prices.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / prices.length;
+        const stability = avg > 0 ? Math.sqrt(variance) / avg : 0;
+        const recentGood = avgAll > 0 ? (last <= avgAll) : false;
+        const itemCodes = new Set(rows.map((row) => row.code).filter(Boolean));
+        const branchNames = new Set(rows.map((row) => row.branch).filter(Boolean));
+
+        let reason;
+        let aboveAvg = false;
+        if (avgAll > 0) {
+          const pctDiff = (avg - avgAll) / avgAll;
+          aboveAvg = pctDiff > 0.02;
+          if (pctDiff <= -0.03) {
+            reason = ar
+              ? `أرخص من المتوسط بـ ${Math.round(Math.abs(pctDiff) * 100)}%`
+              : `${Math.round(Math.abs(pctDiff) * 100)}% below average`;
+          } else if (pctDiff > 0.02) {
+            reason = ar
+              ? `أعلى من المتوسط بـ ${Math.round(pctDiff * 100)}%`
+              : `${Math.round(pctDiff * 100)}% above average`;
+          } else if (stability <= 0.05) {
+            reason = ar ? 'سعر مناسب' : 'Suitable price';
+          } else {
+            reason = ar ? 'سعر مناسب' : 'Suitable price';
+          }
+        } else {
+          reason = stability <= 0.05
+            ? (ar ? 'سعر مستقر' : 'Stable price')
+            : (ar ? 'الأرخص المتاح' : 'Cheapest available');
+        }
+
+        const rankScore = avg + (stability * avg * 0.5) - (recentGood ? (avg * 0.02) : 0);
+        return {
+          vendor,
+          avg,
+          last,
+          reason,
+          rankScore,
+          aboveAvg,
+          sampleCount: rows.length,
+          itemCount: itemCodes.size,
+          branchCount: branchNames.size,
+          latestItemName: latestRow?.name || '',
+          latestItemCode: latestRow?.code || '',
+          latestBranch: latestRow?.branch || '',
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.rankScore - b.rankScore)
+      .slice(0, 5);
+  }, [filteredOps, itemAveragePrice, ar]);
+
+  const supplierComparisonScopeText = useMemo(() => {
+    if (focusMode === 'item' && selectedValue) {
+      return ar ? `المقارنة لهذا الصنف فقط: ${selectedFocusEntity}` : `Comparison for this item only: ${selectedFocusEntity}`;
+    }
+    if (focusMode === 'branch' && selectedValue) {
+      return ar ? `المقارنة لكل أصناف الفرع: ${selectedFocusEntity}` : `Comparison for all items in branch: ${selectedFocusEntity}`;
+    }
+    if (focusMode === 'supplier' && selectedValue) {
+      return ar ? 'هذا العرض يوضح أداء المورد المحدد عبر الأصناف داخل الفترة.' : 'This view shows the selected supplier performance across items in the period.';
+    }
+    return ar ? 'هذه الأرقام تمثل متوسط المورد عبر جميع الأصناف داخل الفلتر الحالي، وليست سعر صنف واحد.' : 'These numbers show the supplier average across all items in the current filter, not a single item price.';
+  }, [focusMode, selectedValue, selectedFocusEntity, ar]);
+
+  const savingsByPurchaseId = useMemo(() => {
+    if (!sortedRecentAll.length) return new Map();
+
+    const historyByCode = new Map();
+    const resolvedSavings = new Map();
+
+    [...sortedRecentAll]
+      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .forEach((purchase) => {
+        const code = String(purchase.code || '').trim();
+        const price = cleanPriceValue(purchase.price);
+        const qty = Number(purchase.qty) || 1;
+
+        if (!purchase.id || !code || price === null) return;
+
+        const history = historyByCode.get(code) || [];
+        let savings = 0;
+
+        if (history.length >= 2) {
+          const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
+          if (baseline > price) savings = (baseline - price) * qty;
+        } else {
+          const impact = Number(purchase.impact);
+          if (Number.isFinite(impact) && impact < 0) savings = Math.abs(impact);
+        }
+
+        resolvedSavings.set(purchase.id, savings);
+        historyByCode.set(code, [...history, price].slice(-10));
+      });
+
+    return resolvedSavings;
+  }, [sortedRecentAll]);
+
+  const periodStats = useMemo(() => {
+    const totalOps = filteredOps.length;
+    const totalSpend = filteredOps.reduce((sum, purchase) => sum + getSafePurchaseTotal(purchase), 0);
+    const gradeCount = { good: 0, ok: 0, bad: 0 };
+    filteredOps.forEach((p) => {
+      const g = p.grade || '';
+      if (!g) return;
+      if (g === 'A' || g === 'A+') gradeCount.good++;
+      else if (g === 'B') gradeCount.ok++;
+      else gradeCount.bad++;
+    });
+    const totalSavings = filteredOps.reduce((sum, purchase) => {
+      if (!purchase?.id) return sum;
+      return sum + (savingsByPurchaseId.get(purchase.id) || 0);
+    }, 0);
+
+    const averageInvoiceValue = totalOps > 0 ? totalSpend / totalOps : 0;
+    return { totalOps, totalSpend, gradeCount, totalSavings, averageInvoiceValue };
+  }, [filteredOps, savingsByPurchaseId]);
+
+
+
+  const actionAlerts = useMemo(() => {
+    const actions = [];
+    if (!filteredOps.length) return actions;
+
+    if (marketStatus.key === 'rising') {
+      actions.push(ar ? 'السعر أعلى من المعتاد' : 'Price is above normal');
+    }
+
+    if (itemAveragePrice && itemLastPrice && itemLastPrice > itemAveragePrice * 1.08) {
+      actions.push(ar ? 'راجع آخر سعر شراء' : 'Review last purchase price');
+    }
+
+    const byBranch = {};
+    filteredOps.forEach((p) => {
+      const price = cleanPriceValue(p.price);
+      if (!p.branch || price === null) return;
+      if (!byBranch[p.branch]) byBranch[p.branch] = [];
+      byBranch[p.branch].push(price);
+    });
+
+    if (itemAveragePrice && itemAveragePrice > 0) {
+      let highBranch = null;
+      Object.entries(byBranch).forEach(([branch, prices]) => {
+        const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
+        if (avg > itemAveragePrice * 1.08) {
+          if (!highBranch || avg > highBranch.avg) highBranch = { branch, avg };
+        }
+      });
+      if (highBranch) {
+        actions.push(ar ? `فرع ${highBranch.branch} يشتري بسعر مرتفع` : `${highBranch.branch} branch buys at a high price`);
+      }
+    }
+
+    return actions.slice(0, 2);
+  }, [filteredOps, marketStatus, itemAveragePrice, itemLastPrice, ar]);
+
+  const bestWorst = useMemo(() => {
+    const withScore = recentOps.filter((p) => Number.isFinite(Number(p.score)));
+    if (!withScore.length) return { bestId: null, worstId: null };
+    const best = [...withScore].sort((a, b) => Number(b.score) - Number(a.score))[0];
+    const worst = [...withScore].sort((a, b) => Number(a.score) - Number(b.score))[0];
+    return { bestId: best?.id || null, worstId: worst?.id || null };
+  }, [recentOps]);
+
+  const simplifyReasonText = useCallback((text) => {
+    const fallback = ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase';
+    if (!text) return fallback;
+    const raw = String(text);
+
+    const avgMatch = raw.match(/(\d+(?:\.\d+)?)%\s*(below|above)\s*avg/i);
+    if (avgMatch) {
+      const pct = Math.round(Number(avgMatch[1]));
+      return avgMatch[2].toLowerCase() === 'below'
+        ? (ar ? `أقل من السعر المعتاد بـ ${pct}%` : `${pct}% below usual price`)
+        : (ar ? `أعلى من السعر المعتاد بـ ${pct}%` : `${pct}% above usual price`);
+    }
+
+    const cleaned = raw
+      .replace(/\s*\+\s*(Falling trend|Rising trend|Supplier prices are stable)/gi, '')
+      .replace(/^(Falling trend|Rising trend|Supplier prices are stable)\s*\+\s*/gi, '')
+      .trim();
+
+    return cleaned || fallback;
+  }, [ar]);
+
+  const normalizeDecisionLabel = useCallback((text) => {
+    const value = String(text || '').trim().toLowerCase();
+    if (value === 'buy now' || value === 'continue' || value === 'اشتر الآن') return 'مناسب';
+    if (value === 'watch' || value === 'راقب') return 'راقب';
+    if (value === 'do not buy' || value === 'لا تشتر') return 'مرتفع';
+    return text || 'مناسب';
+  }, []);
+
+  const supplierSummary = useMemo(() => {
+    if (!supplierRecommendations.length) return { best: null, worst: null };
+    const best = supplierRecommendations[0];
+    const worst = [...supplierRecommendations].sort((a, b) => Number(b.last) - Number(a.last))[0] || null;
+    return { best, worst };
+  }, [supplierRecommendations]);
+
+  const supplierDataQuality = useMemo(() => {
+    if (!supplierRecommendations.length) return { records: 0, vendors: 0 };
+    const records = supplierRecommendations.reduce((sum, s) => sum + (Number(s.sampleCount) || 0), 0);
+    return { records, vendors: supplierRecommendations.length };
+  }, [supplierRecommendations]);
+
+  const supplierQuickSummaryText = useMemo(() => {
+    if (!supplierRecommendations.length) return '';
+    const best = supplierSummary.best;
+    const worst = supplierSummary.worst;
+    const lines = [ar ? 'ملخص الموردين السريع' : 'Quick supplier summary'];
+    lines.push(ar ? `نطاق المقارنة: ${selectedFocusEntity}` : `Comparison scope: ${selectedFocusEntity}`);
+
+    if (best) {
+      lines.push(
+        ar
+          ? `الأفضل: ${best.vendor} بمتوسط ${formatSmartNumber(best.avg, 1)} ${t('currency')} عبر ${best.itemCount || 0} صنف`
+          : `Best: ${best.vendor} with ${formatSmartNumber(best.avg, 1)} ${t('currency')} average across ${best.itemCount || 0} items`
+      );
+    }
+    if (worst) {
+      lines.push(
+        ar
+          ? `الأعلى سعرا: ${worst.vendor} بمتوسط ${formatSmartNumber(worst.avg, 1)} ${t('currency')} عبر ${worst.itemCount || 0} صنف`
+          : `Highest: ${worst.vendor} with ${formatSmartNumber(worst.avg, 1)} ${t('currency')} average across ${worst.itemCount || 0} items`
+      );
+    }
+    if (best && worst && best.vendor !== worst.vendor) {
+      const supplierGap = Math.max(0, Number(worst.last || 0) - Number(best.last || 0));
+      lines.push(
+        ar
+          ? `فرق أفضل مورد: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
+          : `Best supplier gap: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
+      );
+    }
+    return lines.join('\n');
+  }, [supplierRecommendations, supplierSummary, ar, t, selectedFocusEntity]);
+
+  const handleCopySupplierSummary = useCallback(async () => {
+    if (!supplierQuickSummaryText) return;
+    try {
+      await navigator.clipboard.writeText(supplierQuickSummaryText);
+      setCopySummaryState('copied');
+      setTimeout(() => setCopySummaryState('idle'), 1800);
+    } catch {
+      setCopySummaryState('error');
+      setTimeout(() => setCopySummaryState('idle'), 1800);
+    }
+  }, [supplierQuickSummaryText]);
+
+  const simplifySupplierReason = useCallback((reason) => {
+    const text = String(reason || '').toLowerCase();
+    if (text.includes('below average') || text.includes('أرخص من المتوسط')) {
+      return ar ? 'أقل من السعر المعتاد' : 'Below usual price';
+    }
+    if (text.includes('above average') || text.includes('أعلى من المتوسط')) {
+      return ar ? 'أعلى من السعر المعتاد' : 'Above usual price';
+    }
+    if (text.includes('stable') || text.includes('مستقر')) {
+      return ar ? 'سعر مستقر' : 'Stable price';
+    }
+    return ar ? 'سعر ضمن النطاق المعتاد' : 'Within usual range';
+  }, [ar]);
+
+  const focusInsights = useMemo(() => {
+    if (!filteredOps.length) return [];
+
+    if (focusMode === 'all') {
+      return [];
+    }
+
+    const avgMap = (rows, keyField, valueField) => {
+      const map = {};
+      rows.forEach((p) => {
+        const key = p[keyField];
+        const val = cleanPriceValue(p[valueField]);
+        if (!key || val === null) return;
+        if (!map[key]) map[key] = [];
+        map[key].push(val);
+      });
+      return Object.entries(map).map(([key, vals]) => ({
+        key,
+        avg: vals.reduce((s, v) => s + v, 0) / vals.length,
+      }));
+    };
+
+    const vendors = avgMap(filteredOps, 'vendor', 'price').sort((a, b) => a.avg - b.avg);
+    const branches = avgMap(filteredOps, 'branch', 'price').sort((a, b) => a.avg - b.avg);
+    const items = avgMap(filteredOps, 'name', 'price').sort((a, b) => a.avg - b.avg);
+
+    if (focusMode === 'item') {
+      const bestVendor = vendors[0] || null;
+      const worstVendor = vendors[vendors.length - 1] || null;
+      const sameVendor = bestVendor && worstVendor && bestVendor.key === worstVendor.key;
+      const noMeaningfulVendorGap = bestVendor && worstVendor && Math.abs(bestVendor.avg - worstVendor.avg) < 0.01;
+      const bestBranch = branches[0] || null;
+      const worstBranch = branches[branches.length - 1] || null;
+      const sameBranch = bestBranch && worstBranch && bestBranch.key === worstBranch.key;
+      const noMeaningfulBranchGap = bestBranch && worstBranch && Math.abs(bestBranch.avg - worstBranch.avg) < 0.01;
+
+      return [
+        bestVendor
+          ? {
+            tone: 'good',
+            label: (sameVendor || noMeaningfulVendorGap)
+              ? (ar ? 'المورد الحالي لهذا الصنف' : 'Current Supplier for This Item')
+              : (ar ? 'أفضل مورد' : 'Best Supplier'),
+            text: `${bestVendor.key} (${formatSmartNumber(bestVendor.avg, 1)} ${t('currency')})`
+          }
+          : null,
+        worstVendor && !(sameVendor || noMeaningfulVendorGap)
+          ? { tone: 'bad', label: ar ? 'أعلى مورد' : 'Highest Supplier', text: `${worstVendor.key} (${formatSmartNumber(worstVendor.avg, 1)} ${t('currency')})` }
+          : null,
+        bestBranch
+          ? {
+            tone: 'good',
+            label: (sameBranch || noMeaningfulBranchGap)
+              ? (ar ? 'الفرع الحالي لهذا الصنف' : 'Current Branch for This Item')
+              : (ar ? 'أفضل فرع' : 'Best Branch'),
+            text: `${bestBranch.key} (${formatSmartNumber(bestBranch.avg, 1)} ${t('currency')})`
+          }
+          : null,
+        worstBranch && !(sameBranch || noMeaningfulBranchGap)
+          ? { tone: 'bad', label: ar ? 'أسوأ فرع' : 'Worst Branch', text: `${worstBranch.key} (${formatSmartNumber(worstBranch.avg, 1)} ${t('currency')})` }
+          : null,
+      ].filter(Boolean).slice(0, 4);
+    }
+
+    if (focusMode === 'supplier') {
+      const uniqueItems = Array.from(new Set(filteredOps.map((p) => p.code || p.name).filter(Boolean)));
+      const prices = filteredOps
+        .map((p) => cleanPriceValue(p.price))
+        .filter((v) => v !== null)
+        .sort((a, b) => a - b);
+      const minPrice = prices.length ? prices[0] : null;
+      const maxPrice = prices.length ? prices[prices.length - 1] : null;
+      const singleItem = filteredOps.find((p) => p.name || p.code) || null;
+      const singleItemLabel = singleItem
+        ? (singleItem.name || (ar ? 'الصنف الحالي' : 'Current item'))
+        : (ar ? 'الصنف الحالي' : 'Current item');
+      const bestBranch = branches[0] || null;
+      const worstBranch = branches[branches.length - 1] || null;
+      const sameBranch = bestBranch && worstBranch && bestBranch.key === worstBranch.key;
+      const noMeaningfulBranchGap = bestBranch && worstBranch && Math.abs(bestBranch.avg - worstBranch.avg) < 0.01;
+
+      return [
+        uniqueItems.length > 1
+          ? (items[0]
+            ? { tone: 'good', label: ar ? 'أرخص صنف' : 'Cheapest Item', text: `${items[0].key} (${formatSmartNumber(items[0].avg, 1)} ${t('currency')})` }
+            : null)
+          : (minPrice !== null
+            ? { tone: 'good', label: ar ? 'أقل سعر تم الشراء به' : 'Lowest Purchased Price', text: `${singleItemLabel}: ${formatSmartNumber(minPrice, 1)} ${t('currency')}` }
+            : null),
+        uniqueItems.length > 1
+          ? (items[items.length - 1]
+            ? { tone: 'bad', label: ar ? 'أغلى صنف' : 'Most Expensive Item', text: `${items[items.length - 1].key} (${formatSmartNumber(items[items.length - 1].avg, 1)} ${t('currency')})` }
+            : null)
+          : (maxPrice !== null
+            ? { tone: 'bad', label: ar ? 'أعلى سعر تم الشراء به' : 'Highest Purchased Price', text: `${singleItemLabel}: ${formatSmartNumber(maxPrice, 1)} ${t('currency')}` }
+            : null),
+        bestBranch
+          ? {
+            tone: 'good',
+            label: (sameBranch || noMeaningfulBranchGap)
+              ? (ar ? 'الفرع الحالي لهذا المورد' : 'Current Branch for This Supplier')
+              : (ar ? 'أفضل فرع اشترى من هذا المورد' : 'Best Branch for This Supplier'),
+            text: `${bestBranch.key} (${formatSmartNumber(bestBranch.avg, 1)} ${t('currency')})`
+          }
+          : null,
+        worstBranch && !(sameBranch || noMeaningfulBranchGap)
+          ? { tone: 'bad', label: ar ? 'أسوأ فرع اشترى من هذا المورد' : 'Worst Branch for This Supplier', text: `${worstBranch.key} (${formatSmartNumber(worstBranch.avg, 1)} ${t('currency')})` }
+          : null,
+      ].filter(Boolean).slice(0, 4);
+    }
+
+    const uniqueItems = Array.from(new Set(filteredOps.map((p) => p.code || p.name).filter(Boolean)));
+    const prices = filteredOps
+      .map((p) => cleanPriceValue(p.price))
+      .filter((v) => v !== null)
+      .sort((a, b) => a - b);
+    const minPrice = prices.length ? prices[0] : null;
+    const maxPrice = prices.length ? prices[prices.length - 1] : null;
+    const singleItem = filteredOps.find((p) => p.name || p.code) || null;
+    const singleItemLabel = singleItem
+      ? (singleItem.name || (ar ? 'الصنف الحالي' : 'Current item'))
+      : (ar ? 'الصنف الحالي' : 'Current item');
+    const bestVendor = vendors[0] || null;
+    const worstVendor = vendors[vendors.length - 1] || null;
+    const sameVendor = bestVendor && worstVendor && bestVendor.key === worstVendor.key;
+    const noMeaningfulVendorGap = bestVendor && worstVendor && Math.abs(bestVendor.avg - worstVendor.avg) < 0.01;
+
+    return [
+      uniqueItems.length > 1
+        ? (items[items.length - 1]
+          ? { tone: 'bad', label: ar ? 'أغلى صنف يشتريه الفرع' : 'Most Expensive Item in Branch', text: `${items[items.length - 1].key} (${formatSmartNumber(items[items.length - 1].avg, 1)} ${t('currency')})` }
+          : null)
+        : (maxPrice !== null
+          ? { tone: 'bad', label: ar ? 'أعلى سعر اشترى به الفرع' : 'Highest Purchased Price in Branch', text: `${singleItemLabel}: ${formatSmartNumber(maxPrice, 1)} ${t('currency')}` }
+          : null),
+      uniqueItems.length > 1
+        ? (items[0]
+          ? { tone: 'good', label: ar ? 'أرخص صنف يشتريه الفرع' : 'Cheapest Item in Branch', text: `${items[0].key} (${formatSmartNumber(items[0].avg, 1)} ${t('currency')})` }
+          : null)
+        : (minPrice !== null
+          ? { tone: 'good', label: ar ? 'أقل سعر اشترى به الفرع' : 'Lowest Purchased Price in Branch', text: `${singleItemLabel}: ${formatSmartNumber(minPrice, 1)} ${t('currency')}` }
+          : null),
+      worstVendor && !(sameVendor || noMeaningfulVendorGap)
+        ? { tone: 'bad', label: ar ? 'أسوأ مورد لهذا الفرع' : 'Worst Supplier for This Branch', text: `${worstVendor.key} (${formatSmartNumber(worstVendor.avg, 1)} ${t('currency')})` }
+        : null,
+      bestVendor
+        ? {
+          tone: 'good',
+          label: (sameVendor || noMeaningfulVendorGap)
+            ? (ar ? 'المورد الحالي لهذا الفرع' : 'Current Supplier for This Branch')
+            : (ar ? 'أفضل مورد لهذا الفرع' : 'Best Supplier for This Branch'),
+          text: `${bestVendor.key} (${formatSmartNumber(bestVendor.avg, 1)} ${t('currency')})`
+        }
+        : null,
+    ].filter(Boolean).slice(0, 4);
+  }, [filteredOps, focusMode, ar, t]);
+
+  const periodOptions = [
+    { key: 'realtime', ar: 'حتى الآن', en: 'Until now' },
+    { key: 'weekly', ar: 'أسبوعي', en: 'Weekly' },
+    { key: 'monthly', ar: 'شهري', en: 'Monthly' },
+    { key: 'custom', ar: 'مخصص', en: 'Custom' },
+  ];
+  const focusModeOptions = [
+    { key: 'item', ar: 'حسب الصنف', en: 'By item' },
+    { key: 'supplier', ar: 'حسب المورد', en: 'By supplier' },
+    { key: 'branch', ar: 'حسب الفرع', en: 'By branch' },
+    { key: 'all', ar: 'الكل', en: 'All' },
+  ];
+  const activePeriodLabel = (ar ? periodOptions.find((opt) => opt.key === timeFilter)?.ar : periodOptions.find((opt) => opt.key === timeFilter)?.en) || timeFilter;
+  const activeFocusLabel = (ar ? focusModeOptions.find((opt) => opt.key === focusMode)?.ar : focusModeOptions.find((opt) => opt.key === focusMode)?.en) || focusMode;
+  const dashboardKpis = [
+    {
+      key: 'spend',
+      title: ar ? 'إجمالي المشتريات' : 'Total Purchases',
+      val: formatSmartNumber(periodStats.totalSpend, 0),
+      unit: 'SAR',
+      icon: <ShoppingCart size={18}/>,
+      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(77,110,157,0.08),transparent_55%)] before:pointer-events-none',
+    },
+    {
+      key: 'ops',
+      title: ar ? 'عدد الفواتير' : 'Invoices',
+      val: formatSmartNumber(periodStats.totalOps, 0),
+      unit: ar ? 'فاتورة' : 'Invoices',
+      icon: <FileText size={18}/>,
+      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(100,116,139,0.09),transparent_55%)] before:pointer-events-none',
+    },
+    {
+      key: 'savings',
+      title: ar ? 'إجمالي التوفير' : 'Total Savings',
+      val: formatSmartNumber(periodStats.totalSavings, 0),
+      unit: 'SAR',
+      icon: <CheckCircle size={18}/>,
+      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(47,107,86,0.10),transparent_55%)] before:pointer-events-none',
+    },
+    {
+      key: 'avgInvoice',
+      title: ar ? 'متوسط الفاتورة' : 'Average Invoice',
+      val: formatSmartNumber(periodStats.averageInvoiceValue, 0),
+      unit: 'SAR',
+      icon: <Wallet size={18}/>,
+      color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(75,95,133,0.09),transparent_55%)] before:pointer-events-none',
+    },
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+
+      <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
+        <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
+        <div className="relative z-10 flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-4">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="erp-subtle-chip"><Activity size={13} /> {ar ? 'لوحة تنفيذية' : 'Executive view'}</span>
+              <span className="erp-subtle-chip"><CalendarDays size={13} /> {activePeriodLabel}</span>
+              <span className="erp-subtle-chip"><Filter size={13} /> {activeFocusLabel}</span>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-fluid-xl font-black text-slate-900">{ar ? 'ملخص المشتريات والقرار السعري' : 'Purchasing & price decision overview'}</h2>
+              <p className="mt-1 text-fluid-sm text-slate-500 max-w-3xl">{decisionBasisText}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
+              <span className="erp-subtle-chip">{ar ? 'نطاق العرض' : 'Scope'}: {selectedFocusEntity}</span>
+              <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-bold ${marketStatus.key === 'falling' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : marketStatus.key === 'rising' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-600'}`}>
+                {marketStatus.key === 'falling' ? <TrendingDown size={12}/> : marketStatus.key === 'rising' ? <TrendingUp size={12}/> : <Activity size={12}/>} {marketStatus.label}
+              </span>
+            </div>
+          </div>
+          <div className="laptop:max-w-[340px] space-y-2">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملاحظات سريعة' : 'Quick notes'}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-800">{marketStatus.hint}</p>
+                  <p className="mt-2 text-xs font-medium text-slate-500">{supplierComparisonScopeText}</p>
+              {actionAlerts.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {actionAlerts.map((note, index) => (
+                    <div key={`${note}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[12px] font-medium text-slate-600">
+                      {note}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-medium text-slate-500">{ar ? 'لا توجد تنبيهات تشغيلية عاجلة الآن.' : 'No urgent operational alerts right now.'}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {!timeScopedOps.length && (
+        <div className="elevated-card p-6 text-center bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
+          <p className="text-sm font-semibold text-slate-700">{ar ? 'لا توجد بيانات كافية بعد. ابدأ بإضافة أول فاتورة.' : 'No data yet. Add your first purchase to unlock insights.'}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 phone:grid-cols-2 laptop:grid-cols-4 gap-3">
+        {dashboardKpis.map((card) => (
+          <StatCard key={card.key} title={card.title} val={card.val} unit={card.unit} icon={card.icon} color={card.color} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 laptop:grid-cols-[1.6fr_1fr] gap-3">
+        <div className="erp-toolbar p-4 md:p-5">
+          <div className="grid grid-cols-1 laptop:grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">{ar ? 'الفترة' : 'Period'}</p>
+              <div className="grid grid-cols-2 phone:grid-cols-4 gap-2">
+                {periodOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setTimeFilter(opt.key)}
+                    className={`min-w-0 px-2 py-1.5 phone:px-3 phone:py-2 rounded-xl text-[10px] phone:text-xs leading-tight font-semibold border transition-all ${timeFilter === opt.key ? 'bg-[linear-gradient(135deg,#5f83b4_0%,#4d6e9d_100%)] text-white border-[#4d6e9d] shadow-[0_10px_20px_rgba(77,110,157,0.18)]' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                  >
+                    {ar ? opt.ar : opt.en}
+                  </button>
+                ))}
+              </div>
+              {timeFilter === 'custom' && (
+                <div className="mt-3 grid grid-cols-1 phone:grid-cols-2 gap-2 max-w-[360px]">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-500">{ar ? 'من' : 'From'}</span>
+                    <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="input-field !py-2" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-500">{ar ? 'إلى' : 'To'}</span>
+                    <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="input-field !py-2" />
+                  </div>
+                </div>
+              )}
+              <p className="text-[11px] font-medium text-slate-500 mt-3">{decisionBasisText}</p>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">{ar ? 'منظور التحليل' : 'Analysis focus'}</p>
+              <div className="grid grid-cols-2 phone:grid-cols-4 gap-2">
+                {focusModeOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => {
+                      setFocusMode(opt.key);
+                      setSelectedItemCode('');
+                      setSelectedSupplier('');
+                      setSelectedBranch('');
+                    }}
+                    className={`min-w-0 px-2 py-1.5 phone:px-3 phone:py-2 rounded-xl text-[10px] phone:text-xs leading-tight font-semibold border transition-all ${focusMode === opt.key ? 'bg-slate-900 text-white border-slate-900 shadow-[0_10px_20px_rgba(15,23,42,0.12)]' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                  >
+                    {ar ? opt.ar : opt.en}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3">
+                {focusMode === 'all' ? (
+                  <div className="input-field !py-2 text-xs text-slate-500 bg-slate-50 border-slate-200">
+                    {ar ? 'يتم عرض كل البيانات بدون تقييد' : 'Showing all data without a single focus'}
+                  </div>
+                ) : (
+                  <select
+                    value={selectedValue}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (focusMode === 'supplier') setSelectedSupplier(value);
+                      else if (focusMode === 'branch') setSelectedBranch(value);
+                      else setSelectedItemCode(value);
+                    }}
+                    className="input-field !py-2 text-xs"
+                  >
+                    <option value="">{focusMode === 'supplier' ? (ar ? 'كل الموردين' : 'All suppliers') : focusMode === 'branch' ? (ar ? 'كل الفروع' : 'All branches') : (ar ? 'كل الأصناف' : 'All items')}</option>
+                    {focusOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="erp-toolbar p-4 md:p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'مؤشرات الحالة' : 'Status metrics'}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="status-good text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><CheckCircle size={12} />{periodStats.gradeCount.good} {ar ? 'مناسب' : 'Suitable'}</span>
+            <span className="status-watch text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertTriangle size={12} />{periodStats.gradeCount.ok} {ar ? 'راقب' : 'Monitor'}</span>
+            <span className="status-high text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertCircle size={12} />{periodStats.gradeCount.bad} {ar ? 'مرتفع' : 'High'}</span>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'المورد المرجعي' : 'Reference supplier'}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}</p>
+                {supplierSummary.best && (
+                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    {ar
+                      ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
+                      : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
+                  </p>
+                )}
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'جودة التحليل' : 'Analysis quality'}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{ar ? `${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد` : `${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {focusInsights.length > 0 && (
+        <>
+          <div className="hidden phone:grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-2">
+            {focusInsights.map((x, idx) => (
+              <div key={`${x.label}-${idx}`} className={`rounded-xl border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
+                <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
+                <p className="text-sm font-black text-slate-800 break-words">{x.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="phone:hidden elevated-card p-3">
+            <button
+              type="button"
+              onClick={() => setShowSecondaryInsights((v) => !v)}
+              className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
+            >
+              <span>{ar ? 'تفاصيل إضافية' : 'More Insights'}</span>
+              <ChevronDown size={16} className={`transition-transform ${showSecondaryInsights ? 'rotate-180' : ''}`} />
+            </button>
+            {showSecondaryInsights && (
+              <div className="mt-2 space-y-2">
+                {focusInsights.map((x, idx) => (
+                  <div key={`${x.label}-${idx}`} className={`rounded-lg border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
+                    <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
+                    <p className="text-sm font-semibold text-slate-800 break-words">{x.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      <div className="elevated-card p-4 phone:p-5 md:p-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.98))]">
+        <div className="flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-3 mb-1">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-[linear-gradient(135deg,#e8f0fb_0%,#dae6f5_100%)] text-[#4d6e9d] grid place-items-center ring-1 ring-slate-200">
+                <Award size={17} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-slate-900">{ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}</h3>
+                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{supplierComparisonScopeText}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {supplierSummary.best && supplierSummary.worst && supplierSummary.best.vendor !== supplierSummary.worst.vendor && (
+              <span className="erp-subtle-chip">
+                <Award size={12} />
+                {ar
+                  ? `فرق أفضل مورد: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`
+                  : `Best supplier gap: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleCopySupplierSummary}
+              disabled={!supplierQuickSummaryText}
+              className="btn-surface inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 disabled:opacity-40"
+              title={ar ? 'نسخ ملخص الموردين' : 'Copy supplier summary'}
+            >
+              <Copy size={13} />
+              {ar ? 'نسخ الملخص' : 'Copy summary'}
+            </button>
+          </div>
+        </div>
+        {copySummaryState !== 'idle' && (
+          <p className={`text-[10px] font-black mb-2 ${copySummaryState === 'copied' ? 'text-emerald-700' : 'text-red-700'}`}>
+            {copySummaryState === 'copied'
+              ? (ar ? 'تم نسخ الملخص بنجاح' : 'Summary copied successfully')
+              : (ar ? 'تعذر نسخ الملخص' : 'Failed to copy summary')}
+          </p>
+        )}
+        <div className="mt-3 grid grid-cols-1 laptop:grid-cols-[1.2fr_2fr] gap-3">
+          <div className="erp-toolbar p-4 space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملخص القرار' : 'Decision summary'}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-700">{ar ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.' : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}</p>
+            </div>
+            <div className="space-y-2 text-[11px] font-semibold text-slate-600">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                {ar
+                  ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
+                  : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                {supplierComparisonScopeText}
+              </div>
+              {supplierSummary.best && supplierSummary.worst && (
+                <div className="flex flex-col gap-2">
+                  <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+                    <CheckCircle size={12} />
+                    {ar ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)` : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
+                  </span>
+                  <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {ar ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)` : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-3">
+            {supplierRecommendations.slice(0, 5).map((s, idx) => (
+              <div key={s.vendor} className={`rounded-[20px] border px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] ${
+                idx === 0
+                  ? 'border-emerald-300 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(229,248,238,0.98))]'
+                  : !s.aboveAvg
+                    ? 'border-emerald-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,250,245,0.98))]'
+                    : 'border-slate-200 bg-white'
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {idx === 0 && (
+                      <span className="status-good inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-black">
+                        {ar ? 'الترشيح الأول' : 'Top pick'}
+                      </span>
+                    )}
+                    <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {ar ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف` : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
+                    </p>
+                  </div>
+                  <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {idx === 0 ? <Award size={16} /> : <Store size={16} />}
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2.5">
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'آخر سعر شراء' : 'Last purchase price'}</p>
+                    <p className="mt-1 text-base font-black text-slate-900">{formatSmartNumber(s.last, 1)} <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span></p>
+                    {(s.latestItemName || s.latestBranch) && (
+                      <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
+                        {ar
+                          ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
+                          : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                      {ar
+                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+                    </p>
+                  </div>
+                </div>
+                <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
+                  {!s.aboveAvg
+                    ? (<><CheckCircle size={12} />{ar ? 'ضمن النطاق الجيد' : 'Within a good range'}</>)
+                    : (<><AlertCircle size={12} />{ar ? 'أعلى من متوسط الفترة' : 'Above period average'}</>)}
+                </span>
+                <p className={`text-xs font-bold mt-3 break-words ${s.aboveAvg ? 'text-amber-700' : 'text-emerald-700'}`}>{simplifySupplierReason(s.reason)}</p>
+              </div>
+            ))}
+            {supplierRecommendations.length === 0 && (
+              <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
+                {ar ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي' : 'Recommendations appear once enough data exists in the current filter'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+
+
+      <div className="elevated-card overflow-hidden">
+        <div className="px-4 md:px-6 py-4 border-b border-slate-100 flex items-start gap-2">
+          <Activity size={17} className="text-slate-600 mt-0.5 shrink-0"/>
+          <div>
+            <h3 className="font-black text-slate-800">{ar ? 'آخر العمليات' : 'Latest Operations'}</h3>
+            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+              {ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase'}
+            </p>
+          </div>
+        </div>
+
+        <DataTable
+          data={recentOps.map((p) => {
+            const rawDecision = ar
+              ? (p.decisionAr || p.decisionEn || getDecisionLabelByGrade(p.grade))
+              : (p.decisionEn || p.decisionAr || getDecisionLabelByGrade(p.grade));
+            const dec = normalizeDecisionLabel(rawDecision);
+            const sourceReason = ar
+              ? (p.reasonAr || p.reasonEn)
+              : (p.reasonEn || p.reasonAr);
+            const reason = simplifyReasonText(sourceReason);
+            const isBest = p.id === bestWorst.bestId;
+            const isWorst = p.id === bestWorst.worstId;
+            return { ...p, dec, reason, isBest, isWorst };
+          })}
+          columns={[
+            { key: 'vendor', label: t('vendor'), sortable: true },
+            { key: 'name', label: t('item'), sortable: true },
+            {
+              key: 'price',
+              label: t('price'),
+              sortable: true,
+              render: (val) => (
+                <span className="font-black text-blue-700">
+                  {formatSmartNumber(val, 2)} {t('currency')}
+                </span>
+              ),
+            },
+            {
+              key: 'grade',
+              label: t('grade'),
+              sortable: true,
+              render: (val, row) => (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+                      val === 'A'
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : val === 'B'
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                    }`}
+                  >
+                    {row.dec}
+                  </span>
+                  {row.isBest && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                      {ar ? 'أفضل' : 'Best'}
+                    </span>
+                  )}
+                  {row.isWorst && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
+                      {ar ? 'أضعف' : 'Worst'}
+                    </span>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'reason',
+              label: t('decision'),
+              sortable: false,
+              render: (val) => <span className="font-bold text-slate-600">{val}</span>,
+            },
+          ]}
+          highlightRows={{
+            [bestWorst.bestId]: { className: 'bg-emerald-50/60 border-emerald-100' },
+            [bestWorst.worstId]: { className: 'bg-red-50/60 border-red-100' },
+          }}
+          pageSize={10}
+          isRTL={ar}
+          emptyMessage={ar ? 'لا توجد عمليات حديثة' : 'No recent operations'}
+          renderRow={(row) => (
+            <div className={`px-4 py-3 ${row.isBest ? 'bg-emerald-50/60' : row.isWorst ? 'bg-red-50/60' : ''}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-black text-slate-900 break-words leading-snug">{row.name || '—'}</p>
+                  <p className="text-xs font-bold text-slate-500 break-words leading-snug">{row.vendor || '—'}</p>
+                </div>
+                <p className="font-black text-blue-700 text-sm">{formatSmartNumber(row.price, 2)}</p>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+                      row.grade === 'A'
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : row.grade === 'B'
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                    }`}
+                  >
+                    {row.dec}
+                  </span>
+                  {row.isBest && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                      {ar ? 'أفضل' : 'Best'}
+                    </span>
+                  )}
+                  {row.isWorst && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
+                      {ar ? 'أضعف' : 'Worst'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-500 break-words text-right">{row.reason}</p>
+              </div>
+            </div>
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+...
+احذف تكررارات النصوص
 // ==========================================
 // 3. شاشة تسجيل الفاتورة
 // ==========================================
