@@ -2873,227 +2873,329 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
           </div>
 
          <div className="p-4 phone:p-6 tablet:p-8 laptop:p-10 space-y-5 tablet:space-y-6">
-           <div className="erp-toolbar p-4 tablet:p-5">
-             <div className="flex items-center gap-2 mb-4">
-               <CalendarDays size={16} className="text-slate-500"/>
-               <h3 className="text-sm phone:text-base font-black text-slate-800">{lang === 'ar' ? 'بيانات العملية' : 'Transaction details'}</h3>
-             </div>
-             <div className="grid grid-cols-1 tablet:grid-cols-2 gap-4 tablet:gap-6">
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CalendarDays size={14}/> {t('date')}</label>
-                   <input type="date" required className="input-field" value={formData.date} onChange={e=>setFormField('date', e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={14}/> {t('branch')}</label>
-                   <select required className="input-field" value={formData.branch} onChange={e=>setFormField('branch', e.target.value)}>
-                      <option value="">-- {t('branch')} --</option>
-                      {branches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                   </select>
-                </div>
-             </div>
-                </div>
-
-                 <div className="erp-toolbar p-4 tablet:p-5 space-y-2">
-                   <div className="flex items-center gap-2 mb-1">
-                    <Store size={16} className="text-slate-500"/>
-                    <h3 className="text-sm phone:text-base font-black text-slate-800">{lang === 'ar' ? 'المورد' : 'Supplier'}</h3>
-                   </div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Store size={14}/> {t('vendor')}</label>
-               <select required className="input-field" value={formData.vendor} onChange={e=>setFormField('vendor', e.target.value)}>
-                   <option value="">-- {t('vendor')} --</option>
-                   {vendors.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
-                </select>
-             </div>
-
-                 <div className="erp-toolbar p-4 tablet:p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Package size={16} className="text-slate-500"/>
-                    <h3 className="text-sm phone:text-base font-black text-slate-800">{lang === 'ar' ? 'تفاصيل الصنف والتسعير' : 'Item and pricing details'}</h3>
-                  </div>
-                  <div className="grid grid-cols-1 tablet:grid-cols-3 gap-4 tablet:gap-6">
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Package size={14}/> {t('item')}</label>
-                   <select required className="input-field border-blue-200" value={formData.code} onChange={e=>setFormField('code', e.target.value)}>
-                      <option value="">-- {t('item')} --</option>
-                      {items.map(i => <option key={i.id} value={i.code}>{i.name} (#{i.code})</option>)}
-                   </select>
-                </div>
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Database size={14}/> {t('qty')}</label>
-                   <input type="number" required className={`input-field text-center ${inlineValidation.qtyError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.qty} onChange={e=>setFormField('qty', e.target.value)} />
-                   {inlineValidation.qtyError && (
-                     <p className="text-[10px] font-black text-red-600">{inlineValidation.qtyError}</p>
-                   )}
-                </div>
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Wallet size={14}/> {t('price')}</label>
-                   <div className="relative">
-                    <input type="number" step="0.01" required className={`input-field text-blue-600 pl-14 text-lg phone:text-xl ${inlineValidation.priceError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.price} onChange={e=>setFormField('price', e.target.value)} placeholder="0.00" />
-                      <span className="absolute left-4 top-4 font-black text-slate-300 text-xs">SAR</span>
-                   </div>
-                   {inlineValidation.priceError && (
-                     <p className="text-[10px] font-black text-red-600">{inlineValidation.priceError}</p>
-                   )}
-                </div>
-               </div>
-             </div>
-
-             {selectedItem && formData.price && (
-               <div className="space-y-4">
-                 {/* Main decision block */}
-                 {liveAnalysis ? (
-                   <div className={`p-4 phone:p-5 tablet:p-6 rounded-2xl border-2 ${getGradeStyle(liveAnalysis.grade).border} ${getGradeStyle(liveAnalysis.grade).bg}`}>
-                     <div className="flex flex-col tablet:flex-row items-start justify-between gap-4 mb-5">
-                       <div>
-                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{t('purchase_analysis')}</p>
-                         <div className="flex items-center gap-3">
-                           <div>
-                             <p className={`text-base phone:text-lg font-black ${getGradeStyle(liveAnalysis.grade).text}`}>
-                                 {lang === 'ar'
-                                   ? (liveAnalysis.decisionAr || liveAnalysis.decisionEn || getLocalizedDecisionLabel(liveAnalysis.grade, true))
-                                   : (liveAnalysis.decisionEn || liveAnalysis.decisionAr || getLocalizedDecisionLabel(liveAnalysis.grade, false))}
-                             </p>
-                             <p className="text-[11px] phone:text-xs font-bold text-slate-500">
-                               {lang === 'ar' ? 'مؤشر قرار الشراء' : 'Purchase decision index'}: {liveAnalysis.score > 0 ? '+' : ''}{formatSmartNumber(liveAnalysis.score, 1)} · {liveAnalysis.sampleCount} {t('samples')}
-                             </p>
-                           </div>
-                         </div>
-                       </div>
-                       <div className="text-right bg-white/60 px-4 py-3 rounded-xl w-full tablet:w-auto">
-                         <p className="text-[10px] font-black text-slate-500 uppercase mb-1">{lang==='ar'?'إجمالي الفاتورة':'Invoice Total'}</p>
-                         <p className="text-lg phone:text-xl font-black text-slate-900 tabular-nums break-all">{liveTotal.toLocaleString('en-US',{maximumFractionDigits:2})} <span className="text-xs font-bold text-slate-400">SAR</span></p>
-                           {estimatedExtraCost > 0 && (
-                             <p className="mt-1 text-[11px] font-black text-red-700">
-                               {lang === 'ar'
-                                 ? `تكلفة زائدة متوقعة: ${formatSmartNumber(estimatedExtraCost, 0)} SAR`
-                                 : `Expected extra cost: ${formatSmartNumber(estimatedExtraCost, 0)} SAR`}
-                             </p>
-                           )}
-                       </div>
-                     </div>
-
-                     {/* Reason */}
-                     {liveAnalysis.reasons.length > 0 && (
-                       <div className="px-4 py-3 bg-white/60 rounded-xl text-xs phone:text-sm text-slate-700 font-bold">
-                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">{t('reason')}</span>
-                         <span>{lang === 'ar' ? (liveAnalysis.reasons[0]?.ar || liveAnalysis.reasons[0]?.en) : (liveAnalysis.reasons[0]?.en || liveAnalysis.reasons[0]?.ar)}</span>
-                       </div>
-                     )}
-
-                     {liveRootCause && (
-                       <div className="px-4 py-3 bg-white/70 rounded-xl text-xs phone:text-sm border border-slate-200">
-                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">{t('cause')}</span>
-                         <p className="font-black text-slate-700 mb-1">{lang === 'ar' ? liveRootCause.causeAr : liveRootCause.causeEn}</p>
-                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mt-2 mb-1">{t('recommendation')}</span>
-                         <p className="font-bold text-slate-600">{lang === 'ar' ? liveRootCause.recommendationAr : liveRootCause.recommendationEn}</p>
-                       </div>
-                     )}
-                   </div>
-                 ) : (
-                   <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50 text-center">
-                     <Info size={20} className="text-slate-400 mx-auto mb-2"/>
-                     <p className="text-sm font-bold text-slate-500">{t('no_history')}</p>
-                   </div>
-                 )}
-
-                 {(liveAnalysis || referencePrice != null) && (
-                   <div className="elevated-card p-3 md:p-4">
-                     <button
-                       type="button"
-                       onClick={() => setShowAdvancedPricing((v) => !v)}
-                       className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
-                     >
-                       <span>{lang === 'ar' ? 'تفاصيل المقارنة السعرية' : 'Advanced price details'}</span>
-                       <ChevronDown size={16} className={`transition-transform ${showAdvancedPricing ? 'rotate-180' : ''}`} />
-                     </button>
-                     {showAdvancedPricing && (
-                       <div className="mt-3 space-y-3">
-                         {liveAnalysis && (
-                           <div className="grid grid-cols-1 phone:grid-cols-2 laptop:grid-cols-4 gap-3">
-                             {[
-                               { label: t('avg_price_hist'), val: formatSmartNumber(liveAnalysis.avgPrice, 2), color: 'text-slate-700' },
-                               { label: t('min_price'), val: formatSmartNumber(liveAnalysis.minPrice, 2), color: 'text-emerald-700' },
-                               { label: t('max_price'), val: formatSmartNumber(liveAnalysis.maxPrice, 2), color: 'text-red-700' },
-                               { label: t('last_purchase_price'), val: formatSmartNumber(liveAnalysis.lastPrice, 2), color: 'text-blue-700' },
-                             ].map(item => (
-                               <div key={item.label} className="bg-white rounded-lg border border-slate-200 p-3 text-center">
-                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
-                                 <p className={`mt-2 text-lg font-black tabular-nums ${item.color}`}>{item.val} <span className="text-xs text-slate-300">SAR</span></p>
-                               </div>
-                             ))}
-                           </div>
-                         )}
-
-                         {referencePrice != null && (
-                           <div className="grid grid-cols-1 phone:grid-cols-2 gap-3">
-                             <div className="bg-white rounded-lg border border-slate-200 p-3">
-                               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('price_change_value')}</p>
-                               <p className={`mt-2 text-lg tablet:text-xl font-black tabular-nums break-all ${referenceChange != null && referenceChange > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                 {referenceChange != null ? formatSmartNumber(referenceChange, 2) : '—'} <span className="text-sm text-slate-400">SAR</span>
-                               </p>
-                             </div>
-                             <div className="bg-white rounded-lg border border-slate-200 p-3">
-                               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t('price_change_percent')}</p>
-                               <p className={`mt-2 text-lg tablet:text-xl font-black tabular-nums break-all ${referencePercent != null && referencePercent > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                 {referencePercent != null ? formatPercent(referencePercent, 1) : '—'}
-                               </p>
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                     )}
-                   </div>
-                 )}
-               </div>
-             )}
-
-             {requiresManagerApproval && (
-               <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-                 <p className="text-xs font-black text-amber-800">
-                   {lang === 'ar'
-                     ? `يتطلب اعتماد مدير لأن التكلفة الزائدة المتوقعة (${formatSmartNumber(estimatedExtraCost, 0)} SAR) تتجاوز حد ${formatSmartNumber(managerApprovalThreshold, 0)} SAR.`
-                     : `Manager approval is required because expected extra cost (${formatSmartNumber(estimatedExtraCost, 0)} SAR) exceeds ${formatSmartNumber(managerApprovalThreshold, 0)} SAR.`}
-                 </p>
-                 <label className="mt-2 inline-flex items-center gap-2 text-xs font-bold text-amber-900">
-                   <input
-                     type="checkbox"
-                     className="h-4 w-4"
-                     checked={managerApproved}
-                     onChange={(e) => setManagerApproved(e.target.checked)}
-                   />
-                   {lang === 'ar' ? 'تمت مراجعة واعتماد المدير لهذه الفاتورة' : 'Manager has reviewed and approved this invoice'}
-                 </label>
-               </div>
-             )}
-
-             <div className="hidden tablet:flex flex-col tablet:flex-row gap-4 pt-8 border-t-2 border-slate-50">
-                 <button type="button" disabled={loading} onClick={()=>{ setFormData({...formData, code:'', price:''}); setManagerApproved(false); }} className="btn-surface tablet:order-1 order-2 flex-1 py-3 bg-white text-slate-500 rounded-md border border-slate-200 font-semibold flex justify-center items-center gap-2 transition-colors hover:bg-slate-50 disabled:opacity-50">{t('clear')}</button>
-                 <button type="submit" disabled={loading} className="btn-surface tablet:order-2 order-1 flex-[2] py-3.5 bg-blue-600 text-white rounded-md font-semibold text-base tablet:text-lg flex justify-center items-center gap-3 shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50">
-                   {loading ? <div className="w-6 h-6 border-4 border-white/30 border-t-white animate-spin rounded-full"></div> : <><Save size={24}/> {t('save')}</>}
-                </button>
-             </div>
-             <div className="tablet:hidden -mx-1 pt-2">
-               <div className="rounded-[22px] border border-slate-200/90 bg-white/95 backdrop-blur px-3 py-3 shadow-[0_16px_32px_rgba(15,23,42,0.12)]">
-                 <div className="flex items-center justify-between gap-3 mb-3">
-                   <div className="min-w-0">
-                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{lang === 'ar' ? 'إجراء سريع' : 'Quick action'}</p>
-                     <p className="text-xs font-bold text-slate-600 break-words">{lang === 'ar' ? 'احفظ العملية أو امسح الحقول بسرعة' : 'Save this entry or reset the fields quickly'}</p>
-                   </div>
-                   <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-right shrink-0">
-                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{lang === 'ar' ? 'الإجمالي' : 'Total'}</p>
-                     <p className="text-sm font-black text-slate-900 tabular-nums">{formatSmartNumber(liveTotal, 2)} <span className="text-[10px] text-slate-400">SAR</span></p>
-                   </div>
-                 </div>
-                 <div className="grid grid-cols-2 gap-2">
-                   <button type="button" disabled={loading} onClick={()=>{ setFormData({...formData, code:'', price:''}); setManagerApproved(false); }} className="btn-surface py-3 bg-white text-slate-500 rounded-xl border border-slate-200 font-semibold flex justify-center items-center gap-2 transition-colors hover:bg-slate-50 disabled:opacity-50">{t('clear')}</button>
-                   <button type="submit" disabled={loading} className="btn-surface py-3 bg-blue-600 text-white rounded-xl font-semibold flex justify-center items-center gap-2 shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.99] disabled:opacity-50">
-                     {loading ? <div className="w-5 h-5 border-4 border-white/30 border-t-white animate-spin rounded-full"></div> : <><Save size={18}/> {t('save')}</>}
-                   </button>
-                 </div>
-               </div>
-             </div>
+         
+        <div className="erp-toolbar p-4 md:p-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'مؤشرات الحالة' : 'Status metrics'}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="status-good text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><CheckCircle size={12} />{periodStats.gradeCount.good} {ar ? 'مناسب' : 'Suitable'}</span>
+            <span className="status-watch text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertTriangle size={12} />{periodStats.gradeCount.ok} {ar ? 'راقب' : 'Monitor'}</span>
+            <span className="status-high text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertCircle size={12} />{periodStats.gradeCount.bad} {ar ? 'مرتفع' : 'High'}</span>
           </div>
-       </form>
+          <div className="mt-4 space-y-2">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'المورد المرجعي' : 'Reference supplier'}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}</p>
+                {supplierSummary.best && (
+                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    {ar
+                      ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
+                      : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
+                  </p>
+                )}
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'جودة التحليل' : 'Analysis quality'}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">{ar ? `${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد` : `${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {focusInsights.length > 0 && (
+        <>
+          <div className="hidden phone:grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-2">
+            {focusInsights.map((x, idx) => (
+              <div key={`${x.label}-${idx}`} className={`rounded-xl border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
+                <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
+                <p className="text-sm font-black text-slate-800 break-words">{x.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="phone:hidden elevated-card p-3">
+            <button
+              type="button"
+              onClick={() => setShowSecondaryInsights((v) => !v)}
+              className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
+            >
+              <span>{ar ? 'تفاصيل إضافية' : 'More Insights'}</span>
+              <ChevronDown size={16} className={`transition-transform ${showSecondaryInsights ? 'rotate-180' : ''}`} />
+            </button>
+            {showSecondaryInsights && (
+              <div className="mt-2 space-y-2">
+                {focusInsights.map((x, idx) => (
+                  <div key={`${x.label}-${idx}`} className={`rounded-lg border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
+                    <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
+                    <p className="text-sm font-semibold text-slate-800 break-words">{x.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      <div className="elevated-card p-4 phone:p-5 md:p-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.98))]">
+        <div className="flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-3 mb-1">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-[linear-gradient(135deg,#e8f0fb_0%,#dae6f5_100%)] text-[#4d6e9d] grid place-items-center ring-1 ring-slate-200">
+                <Award size={17} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-black text-slate-900">{ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}</h3>
+                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{supplierComparisonScopeText}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {supplierSummary.best && supplierSummary.worst && supplierSummary.best.vendor !== supplierSummary.worst.vendor && (
+              <span className="erp-subtle-chip">
+                <Award size={12} />
+                {ar
+                  ? `فرق أفضل مورد: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`
+                  : `Best supplier gap: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleCopySupplierSummary}
+              disabled={!supplierQuickSummaryText}
+              className="btn-surface inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 disabled:opacity-40"
+              title={ar ? 'نسخ ملخص الموردين' : 'Copy supplier summary'}
+            >
+              <Copy size={13} />
+              {ar ? 'نسخ الملخص' : 'Copy summary'}
+            </button>
+          </div>
+        </div>
+        {copySummaryState !== 'idle' && (
+          <p className={`text-[10px] font-black mb-2 ${copySummaryState === 'copied' ? 'text-emerald-700' : 'text-red-700'}`}>
+            {copySummaryState === 'copied'
+              ? (ar ? 'تم نسخ الملخص بنجاح' : 'Summary copied successfully')
+              : (ar ? 'تعذر نسخ الملخص' : 'Failed to copy summary')}
+          </p>
+        )}
+        <div className="mt-3 grid grid-cols-1 laptop:grid-cols-[1.2fr_2fr] gap-3">
+          <div className="erp-toolbar p-4 space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملخص القرار' : 'Decision summary'}</p>
+              <p className="mt-2 text-sm font-semibold text-slate-700">{ar ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.' : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}</p>
+            </div>
+            <div className="space-y-2 text-[11px] font-semibold text-slate-600">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                {ar
+                  ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
+                  : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                {supplierComparisonScopeText}
+              </div>
+              {supplierSummary.best && supplierSummary.worst && (
+                <div className="flex flex-col gap-2">
+                  <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+                    <CheckCircle size={12} />
+                    {ar ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)` : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
+                  </span>
+                  <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    {ar ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)` : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-3">
+            {supplierRecommendations.slice(0, 5).map((s, idx) => (
+              <div key={s.vendor} className={`rounded-[20px] border px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] ${
+                idx === 0
+                  ? 'border-emerald-300 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(229,248,238,0.98))]'
+                  : !s.aboveAvg
+                    ? 'border-emerald-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,250,245,0.98))]'
+                    : 'border-slate-200 bg-white'
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {idx === 0 && (
+                      <span className="status-good inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-black">
+                        {ar ? 'الترشيح الأول' : 'Top pick'}
+                      </span>
+                    )}
+                    <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
+                    <p className="text-[11px] font-bold text-slate-500 mt-1">
+                      {ar ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف` : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
+                    </p>
+                  </div>
+                  <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {idx === 0 ? <Award size={16} /> : <Store size={16} />}
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2.5">
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'آخر سعر شراء' : 'Last purchase price'}</p>
+                    <p className="mt-1 text-base font-black text-slate-900">{formatSmartNumber(s.last, 1)} <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span></p>
+                    {(s.latestItemName || s.latestBranch) && (
+                      <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
+                        {ar
+                          ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
+                          : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                      {ar
+                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+                    </p>
+                  </div>
+                </div>
+                <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
+                  {!s.aboveAvg
+                    ? (<><CheckCircle size={12} />{ar ? 'ضمن النطاق الجيد' : 'Within a good range'}</>)
+                    : (<><AlertCircle size={12} />{ar ? 'أعلى من متوسط الفترة' : 'Above period average'}</>)}
+                </span>
+                <p className={`text-xs font-bold mt-3 break-words ${s.aboveAvg ? 'text-amber-700' : 'text-emerald-700'}`}>{simplifySupplierReason(s.reason)}</p>
+              </div>
+            ))}
+            {supplierRecommendations.length === 0 && (
+              <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
+                {ar ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي' : 'Recommendations appear once enough data exists in the current filter'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+
+
+      <div className="elevated-card overflow-hidden">
+        <div className="px-4 md:px-6 py-4 border-b border-slate-100 flex items-start gap-2">
+          <Activity size={17} className="text-slate-600 mt-0.5 shrink-0"/>
+          <div>
+            <h3 className="font-black text-slate-800">{ar ? 'آخر العمليات' : 'Latest Operations'}</h3>
+            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+              {ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase'}
+            </p>
+          </div>
+        </div>
+
+        <DataTable
+          data={recentOps.map((p) => {
+            const rawDecision = ar
+              ? (p.decisionAr || p.decisionEn || getDecisionLabelByGrade(p.grade))
+              : (p.decisionEn || p.decisionAr || getDecisionLabelByGrade(p.grade));
+            const dec = normalizeDecisionLabel(rawDecision);
+            const sourceReason = ar
+              ? (p.reasonAr || p.reasonEn)
+              : (p.reasonEn || p.reasonAr);
+            const reason = simplifyReasonText(sourceReason);
+            const isBest = p.id === bestWorst.bestId;
+            const isWorst = p.id === bestWorst.worstId;
+            return { ...p, dec, reason, isBest, isWorst };
+          })}
+          columns={[
+            { key: 'vendor', label: t('vendor'), sortable: true },
+            { key: 'name', label: t('item'), sortable: true },
+            {
+              key: 'price',
+              label: t('price'),
+              sortable: true,
+              render: (val) => (
+                <span className="font-black text-blue-700">
+                  {formatSmartNumber(val, 2)} {t('currency')}
+                </span>
+              ),
+            },
+            {
+              key: 'grade',
+              label: t('grade'),
+              sortable: true,
+              render: (val, row) => (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+                      val === 'A'
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : val === 'B'
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                    }`}
+                  >
+                    {row.dec}
+                  </span>
+                  {row.isBest && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                      {ar ? 'أفضل' : 'Best'}
+                    </span>
+                  )}
+                  {row.isWorst && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
+                      {ar ? 'أضعف' : 'Worst'}
+                    </span>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'reason',
+              label: t('decision'),
+              sortable: false,
+              render: (val) => <span className="font-bold text-slate-600">{val}</span>,
+            },
+          ]}
+          highlightRows={{
+            [bestWorst.bestId]: { className: 'bg-emerald-50/60 border-emerald-100' },
+            [bestWorst.worstId]: { className: 'bg-red-50/60 border-red-100' },
+          }}
+          pageSize={10}
+          isRTL={ar}
+          emptyMessage={ar ? 'لا توجد عمليات حديثة' : 'No recent operations'}
+          renderRow={(row) => (
+            <div className={`px-4 py-3 ${row.isBest ? 'bg-emerald-50/60' : row.isWorst ? 'bg-red-50/60' : ''}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-black text-slate-900 break-words leading-snug">{row.name || '—'}</p>
+                  <p className="text-xs font-bold text-slate-500 break-words leading-snug">{row.vendor || '—'}</p>
+                </div>
+                <p className="font-black text-blue-700 text-sm">{formatSmartNumber(row.price, 2)}</p>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+                      row.grade === 'A'
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : row.grade === 'B'
+                        ? 'bg-amber-100 text-amber-700 border-amber-200'
+                        : 'bg-red-100 text-red-700 border-red-200'
+                    }`}
+                  >
+                    {row.dec}
+                  </span>
+                  {row.isBest && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                      {ar ? 'أفضل' : 'Best'}
+                    </span>
+                  )}
+                  {row.isWorst && (
+                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
+                      {ar ? 'أضعف' : 'Worst'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-bold text-slate-500 break-words text-right">{row.reason}</p>
+              </div>
+            </div>
+          )}
+        />
+      </div>
     </div>
   );
 }
