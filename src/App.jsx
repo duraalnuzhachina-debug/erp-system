@@ -2038,56 +2038,91 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       color: 'before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(75,95,133,0.09),transparent_55%)] before:pointer-events-none',
     },
   ];
+return (
+  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
 
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+    <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
+      <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
+      <div className="relative z-10 flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-4">
 
-      <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
-        <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-4">
-          <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="erp-subtle-chip"><Activity size={13} /> {ar ? 'لوحة تنفيذية' : 'Executive view'}</span>
-              <span className="erp-subtle-chip"><CalendarDays size={13} /> {activePeriodLabel}</span>
-              <span className="erp-subtle-chip"><Filter size={13} /> {activeFocusLabel}</span>
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-fluid-xl font-black text-slate-900">{ar ? 'ملخص المشتريات والقرار السعري' : 'Purchasing & price decision overview'}</h2>
-              <p className="mt-1 text-fluid-sm text-slate-500 max-w-3xl">{decisionBasisText}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
-              <span className="erp-subtle-chip">{ar ? 'نطاق العرض' : 'Scope'}: {selectedFocusEntity}</span>
-              <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-bold ${marketStatus.key === 'falling' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : marketStatus.key === 'rising' ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-600'}`}>
-                {marketStatus.key === 'falling' ? <TrendingDown size={12}/> : marketStatus.key === 'rising' ? <TrendingUp size={12}/> : <Activity size={12}/>} {marketStatus.label}
-              </span>
-            </div>
+        <div className="min-w-0 space-y-3">
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="erp-subtle-chip"><CalendarDays size={13} /> {activePeriodLabel}</span>
+            <span className="erp-subtle-chip"><Filter size={13} /> {activeFocusLabel}</span>
           </div>
-          <div className="laptop:max-w-[340px] space-y-2">
-            <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملاحظات سريعة' : 'Quick notes'}</p>
-              <p className="mt-2 text-sm font-semibold text-slate-800">{marketStatus.hint}</p>
-                  <p className="mt-2 text-xs font-medium text-slate-500">{supplierComparisonScopeText}</p>
-              {actionAlerts.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {actionAlerts.map((note, index) => (
-                    <div key={`${note}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[12px] font-medium text-slate-600">
-                      {note}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-xs font-medium text-slate-500">{ar ? 'لا توجد تنبيهات تشغيلية عاجلة الآن.' : 'No urgent operational alerts right now.'}</p>
-              )}
-            </div>
+
+          <div className="min-w-0">
+            <h2 className="text-fluid-xl font-black text-slate-900">
+              {ar ? 'تحليل المشتريات' : 'Purchasing Insights'}
+            </h2>
+            <p className="mt-1 text-fluid-sm text-slate-500 max-w-3xl">
+              {decisionBasisText}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
+            <span className="erp-subtle-chip">
+              {ar ? 'النطاق' : 'Scope'}: {selectedFocusEntity}
+            </span>
+
+            <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-[11px] font-bold ${
+              marketStatus.key === 'falling'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : marketStatus.key === 'rising'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-slate-200 bg-white text-slate-600'
+            }`}>
+              {marketStatus.key === 'falling'
+                ? <TrendingDown size={12}/>
+                : marketStatus.key === 'rising'
+                ? <TrendingUp size={12}/>
+                : <Activity size={12}/>}
+
+              {marketStatus.label}
+            </span>
+          </div>
+
+        </div>
+
+        <div className="laptop:max-w-[340px] space-y-2">
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              {ar ? 'تنبيهات' : 'Alerts'}
+            </p>
+
+            <p className="mt-2 text-sm font-semibold text-slate-800">
+              {marketStatus.hint}
+            </p>
+
+            {actionAlerts.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {actionAlerts.map((note, index) => (
+                  <div key={`${note}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-[12px] font-medium text-slate-600">
+                    {note}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs font-medium text-slate-500">
+                {ar ? 'لا توجد تنبيهات حالياً' : 'No alerts at the moment'}
+              </p>
+            )}
+
           </div>
         </div>
+
       </div>
+    </div>
 
-      {!timeScopedOps.length && (
-        <div className="elevated-card p-6 text-center bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
-          <p className="text-sm font-semibold text-slate-700">{ar ? 'لا توجد بيانات كافية بعد. ابدأ بإضافة أول فاتورة.' : 'No data yet. Add your first purchase to unlock insights.'}</p>
-        </div>
-      )}
+    {!timeScopedOps.length && (
+      <div className="elevated-card p-6 text-center bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]">
+        <p className="text-sm font-semibold text-slate-700">
+          {ar ? 'لا توجد بيانات حالياً' : 'No data available'}
+        </p>
+      </div>
+    )}
 
       <div className="grid grid-cols-1 phone:grid-cols-2 laptop:grid-cols-4 gap-3">
         {dashboardKpis.map((card) => (
