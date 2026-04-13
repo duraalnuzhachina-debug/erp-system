@@ -2131,406 +2131,482 @@ return (
       </div>
 
       <div className="grid grid-cols-1 laptop:grid-cols-[1.6fr_1fr] gap-3">
-        <div className="erp-toolbar p-4 md:p-5">
-          <div className="grid grid-cols-1 laptop:grid-cols-2 gap-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">{ar ? 'الفترة' : 'Period'}</p>
-              <div className="grid grid-cols-2 phone:grid-cols-4 gap-2">
-                {periodOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setTimeFilter(opt.key)}
-                    className={`min-w-0 px-2 py-1.5 phone:px-3 phone:py-2 rounded-xl text-[10px] phone:text-xs leading-tight font-semibold border transition-all ${timeFilter === opt.key ? 'bg-[linear-gradient(135deg,#5f83b4_0%,#4d6e9d_100%)] text-white border-[#4d6e9d] shadow-[0_10px_20px_rgba(77,110,157,0.18)]' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
-                  >
-                    {ar ? opt.ar : opt.en}
-                  </button>
-                ))}
-              </div>
-              {timeFilter === 'custom' && (
-                <div className="mt-3 grid grid-cols-1 phone:grid-cols-2 gap-2 max-w-[360px]">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-500">{ar ? 'من' : 'From'}</span>
-                    <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="input-field !py-2" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-500">{ar ? 'إلى' : 'To'}</span>
-                    <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="input-field !py-2" />
-                  </div>
-                </div>
-              )}
-              <p className="text-[11px] font-medium text-slate-500 mt-3">{decisionBasisText}</p>
-            </div>
+     {/* ===== شريط الأدوات الجانبي - يعرض مؤشرات الحالة وملخص الموردين ===== */}
+<div className="erp-toolbar p-4 md:p-5">
+  {/* عنوان القسم */}
+  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+    {ar ? 'مؤشرات الحالة' : 'Status metrics'}
+  </p>
 
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">{ar ? 'منظور التحليل' : 'Analysis focus'}</p>
-              <div className="grid grid-cols-2 phone:grid-cols-4 gap-2">
-                {focusModeOptions.map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => {
-                      setFocusMode(opt.key);
-                      setSelectedItemCode('');
-                      setSelectedSupplier('');
-                      setSelectedBranch('');
-                    }}
-                    className={`min-w-0 px-2 py-1.5 phone:px-3 phone:py-2 rounded-xl text-[10px] phone:text-xs leading-tight font-semibold border transition-all ${focusMode === opt.key ? 'bg-slate-900 text-white border-slate-900 shadow-[0_10px_20px_rgba(15,23,42,0.12)]' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
-                  >
-                    {ar ? opt.ar : opt.en}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3">
-                {focusMode === 'all' ? (
-                  <div className="input-field !py-2 text-xs text-slate-500 bg-slate-50 border-slate-200">
-                    {ar ? 'يتم عرض كل البيانات بدون تقييد' : 'Showing all data without a single focus'}
-                  </div>
-                ) : (
-                  <select
-                    value={selectedValue}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (focusMode === 'supplier') setSelectedSupplier(value);
-                      else if (focusMode === 'branch') setSelectedBranch(value);
-                      else setSelectedItemCode(value);
-                    }}
-                    className="input-field !py-2 text-xs"
-                  >
-                    <option value="">{focusMode === 'supplier' ? (ar ? 'كل الموردين' : 'All suppliers') : focusMode === 'branch' ? (ar ? 'كل الفروع' : 'All branches') : (ar ? 'كل الأصناف' : 'All items')}</option>
-                    {focusOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+  {/* شارات الحالة: مناسب / راقب / مرتفع */}
+  <div className="mt-3 flex flex-wrap gap-2">
+    <span className="status-good text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
+      <CheckCircle size={12} />
+      {periodStats.gradeCount.good} {ar ? 'مناسب' : 'Suitable'}
+    </span>
+    <span className="status-watch text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
+      <AlertTriangle size={12} />
+      {periodStats.gradeCount.ok} {ar ? 'راقب' : 'Monitor'}
+    </span>
+    <span className="status-high text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1">
+      <AlertCircle size={12} />
+      {periodStats.gradeCount.bad} {ar ? 'مرتفع' : 'High'}
+    </span>
+  </div>
 
-        <div className="erp-toolbar p-4 md:p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'مؤشرات الحالة' : 'Status metrics'}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="status-good text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><CheckCircle size={12} />{periodStats.gradeCount.good} {ar ? 'مناسب' : 'Suitable'}</span>
-            <span className="status-watch text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertTriangle size={12} />{periodStats.gradeCount.ok} {ar ? 'راقب' : 'Monitor'}</span>
-            <span className="status-high text-xs font-black px-2.5 py-1 rounded-full inline-flex items-center gap-1"><AlertCircle size={12} />{periodStats.gradeCount.bad} {ar ? 'مرتفع' : 'High'}</span>
-          </div>
-          <div className="mt-4 space-y-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'المورد المرجعي' : 'Reference supplier'}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">{supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}</p>
-                {supplierSummary.best && (
-                  <p className="mt-1 text-[11px] font-medium text-slate-500">
-                    {ar
-                      ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
-                      : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
-                  </p>
-                )}
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'جودة التحليل' : 'Analysis quality'}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">{ar ? `${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد` : `${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+  {/* بطاقتا: المورد المرجعي وجودة التحليل */}
+  <div className="mt-4 space-y-2">
 
-      {focusInsights.length > 0 && (
-        <>
-          <div className="hidden phone:grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-2">
-            {focusInsights.map((x, idx) => (
-              <div key={`${x.label}-${idx}`} className={`rounded-xl border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
-                <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
-                <p className="text-sm font-black text-slate-800 break-words">{x.text}</p>
-              </div>
-            ))}
-          </div>
-          <div className="phone:hidden elevated-card p-3">
-            <button
-              type="button"
-              onClick={() => setShowSecondaryInsights((v) => !v)}
-              className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
-            >
-              <span>{ar ? 'تفاصيل إضافية' : 'More Insights'}</span>
-              <ChevronDown size={16} className={`transition-transform ${showSecondaryInsights ? 'rotate-180' : ''}`} />
-            </button>
-            {showSecondaryInsights && (
-              <div className="mt-2 space-y-2">
-                {focusInsights.map((x, idx) => (
-                  <div key={`${x.label}-${idx}`} className={`rounded-lg border px-3 py-2 ${x.tone === 'good' ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
-                    <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>{x.label}</p>
-                    <p className="text-sm font-semibold text-slate-800 break-words">{x.text}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+    {/* بطاقة المورد المرجعي - يعرض أفضل مورد ومتوسط أسعاره */}
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+        {ar ? 'المورد المرجعي' : 'Reference supplier'}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-slate-800">
+        {supplierSummary.best?.vendor || (ar ? 'لا يوجد بعد' : 'Not available yet')}
+      </p>
+      {/* يظهر فقط إذا توفر بيانات لأفضل مورد */}
+      {supplierSummary.best && (
+        <p className="mt-1 text-[11px] font-medium text-slate-500">
+          {ar
+            ? `متوسط ${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} عبر ${supplierSummary.best.itemCount || 0} صنف`
+            : `${formatSmartNumber(supplierSummary.best.avg, 1)} ${t('currency')} average across ${supplierSummary.best.itemCount || 0} items`}
+        </p>
       )}
-      <div className="elevated-card p-4 phone:p-5 md:p-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.98))]">
-        <div className="flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-3 mb-1">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-[linear-gradient(135deg,#e8f0fb_0%,#dae6f5_100%)] text-[#4d6e9d] grid place-items-center ring-1 ring-slate-200">
-                <Award size={17} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-black text-slate-900">{ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}</h3>
-                <p className="text-[11px] font-medium text-slate-500 mt-0.5">{supplierComparisonScopeText}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {supplierSummary.best && supplierSummary.worst && supplierSummary.best.vendor !== supplierSummary.worst.vendor && (
-              <span className="erp-subtle-chip">
-                <Award size={12} />
-                {ar
-                  ? `فرق أفضل مورد: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`
-                  : `Best supplier gap: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={handleCopySupplierSummary}
-              disabled={!supplierQuickSummaryText}
-              className="btn-surface inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 disabled:opacity-40"
-              title={ar ? 'نسخ ملخص الموردين' : 'Copy supplier summary'}
-            >
-              <Copy size={13} />
-              {ar ? 'نسخ الملخص' : 'Copy summary'}
-            </button>
-          </div>
-        </div>
-        {copySummaryState !== 'idle' && (
-          <p className={`text-[10px] font-black mb-2 ${copySummaryState === 'copied' ? 'text-emerald-700' : 'text-red-700'}`}>
-            {copySummaryState === 'copied'
-              ? (ar ? 'تم نسخ الملخص بنجاح' : 'Summary copied successfully')
-              : (ar ? 'تعذر نسخ الملخص' : 'Failed to copy summary')}
+    </div>
+
+    {/* بطاقة جودة التحليل - عدد السجلات والموردين المحللين */}
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+      <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+        {ar ? 'جودة التحليل' : 'Analysis quality'}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-slate-800">
+        {ar
+          ? `${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
+          : `${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
+      </p>
+    </div>
+
+  </div>
+</div>
+
+
+{/* ===== قسم الرؤى الإضافية - يظهر فقط عند توفر بيانات ===== */}
+{focusInsights.length > 0 && (
+  <>
+    {/* عرض الرؤى في شبكة على الشاشات المتوسطة وما فوق */}
+    <div className="hidden phone:grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-4 gap-2">
+      {focusInsights.map((x, idx) => (
+        <div
+          key={`${x.label}-${idx}`}
+          className={`rounded-xl border px-3 py-2 ${
+            x.tone === 'good'
+              ? 'border-emerald-200 bg-emerald-50/50'
+              : 'border-red-200 bg-red-50/50'
+          }`}
+        >
+          {/* عنوان الرؤية */}
+          <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>
+            {x.label}
           </p>
-        )}
-        <div className="mt-3 grid grid-cols-1 laptop:grid-cols-[1.2fr_2fr] gap-3">
-          <div className="erp-toolbar p-4 space-y-3">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملخص القرار' : 'Decision summary'}</p>
-              <p className="mt-2 text-sm font-semibold text-slate-700">{ar ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.' : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}</p>
-            </div>
-            <div className="space-y-2 text-[11px] font-semibold text-slate-600">
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                {ar
-                  ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
-                  : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                {supplierComparisonScopeText}
-              </div>
-              {supplierSummary.best && supplierSummary.worst && (
-                <div className="flex flex-col gap-2">
-                  <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
-                    <CheckCircle size={12} />
-                    {ar ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)` : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
-                  </span>
-                  <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
-                    <AlertCircle size={12} />
-                    {ar ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)` : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-3">
-            {supplierRecommendations.slice(0, 5).map((s, idx) => (
-              <div key={s.vendor} className={`rounded-[20px] border px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] ${
-                idx === 0
-                  ? 'border-emerald-300 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(229,248,238,0.98))]'
-                  : !s.aboveAvg
-                    ? 'border-emerald-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,250,245,0.98))]'
-                    : 'border-slate-200 bg-white'
-              }`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    {idx === 0 && (
-                      <span className="status-good inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-black">
-                        {ar ? 'الترشيح الأول' : 'Top pick'}
-                      </span>
-                    )}
-                    <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
-                    <p className="text-[11px] font-bold text-slate-500 mt-1">
-                      {ar ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف` : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
-                    </p>
-                  </div>
-                  <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {idx === 0 ? <Award size={16} /> : <Store size={16} />}
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2.5">
-                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'آخر سعر شراء' : 'Last purchase price'}</p>
-                    <p className="mt-1 text-base font-black text-slate-900">{formatSmartNumber(s.last, 1)} <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span></p>
-                    {(s.latestItemName || s.latestBranch) && (
-                      <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
-                        {ar
-                          ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
-                          : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
-                      </p>
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
-                    <p className="mt-1 text-[11px] font-medium text-slate-500">
-                      {ar
-                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
-                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
-                    </p>
-                  </div>
-                </div>
-                <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
-                  {!s.aboveAvg
-                    ? (<><CheckCircle size={12} />{ar ? 'ضمن النطاق الجيد' : 'Within a good range'}</>)
-                    : (<><AlertCircle size={12} />{ar ? 'أعلى من متوسط الفترة' : 'Above period average'}</>)}
-                </span>
-                <p className={`text-xs font-bold mt-3 break-words ${s.aboveAvg ? 'text-amber-700' : 'text-emerald-700'}`}>{simplifySupplierReason(s.reason)}</p>
-              </div>
-            ))}
-            {supplierRecommendations.length === 0 && (
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
-                {ar ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي' : 'Recommendations appear once enough data exists in the current filter'}
-              </div>
-            )}
-          </div>
+          {/* نص الرؤية */}
+          <p className="text-sm font-black text-slate-800 break-words">{x.text}</p>
         </div>
-      </div>
+      ))}
+    </div>
 
-
-
-      <div className="elevated-card overflow-hidden">
-        <div className="px-4 md:px-6 py-4 border-b border-slate-100 flex items-start gap-2">
-          <Activity size={17} className="text-slate-600 mt-0.5 shrink-0"/>
-          <div>
-            <h3 className="font-black text-slate-800">{ar ? 'آخر العمليات' : 'Latest Operations'}</h3>
-            <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-              {ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase'}
-            </p>
-          </div>
-        </div>
-
-        <DataTable
-          data={recentOps.map((p) => {
-            const rawDecision = ar
-              ? (p.decisionAr || p.decisionEn || getDecisionLabelByGrade(p.grade))
-              : (p.decisionEn || p.decisionAr || getDecisionLabelByGrade(p.grade));
-            const dec = normalizeDecisionLabel(rawDecision);
-            const sourceReason = ar
-              ? (p.reasonAr || p.reasonEn)
-              : (p.reasonEn || p.reasonAr);
-            const reason = simplifyReasonText(sourceReason);
-            const isBest = p.id === bestWorst.bestId;
-            const isWorst = p.id === bestWorst.worstId;
-            return { ...p, dec, reason, isBest, isWorst };
-          })}
-          columns={[
-            { key: 'vendor', label: t('vendor'), sortable: true },
-            { key: 'name', label: t('item'), sortable: true },
-            {
-              key: 'price',
-              label: t('price'),
-              sortable: true,
-              render: (val) => (
-                <span className="font-black text-blue-700">
-                  {formatSmartNumber(val, 2)} {t('currency')}
-                </span>
-              ),
-            },
-            {
-              key: 'grade',
-              label: t('grade'),
-              sortable: true,
-              render: (val, row) => (
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
-                      val === 'A'
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        : val === 'B'
-                        ? 'bg-amber-100 text-amber-700 border-amber-200'
-                        : 'bg-red-100 text-red-700 border-red-200'
-                    }`}
-                  >
-                    {row.dec}
-                  </span>
-                  {row.isBest && (
-                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                      {ar ? 'أفضل' : 'Best'}
-                    </span>
-                  )}
-                  {row.isWorst && (
-                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
-                      {ar ? 'أضعف' : 'Worst'}
-                    </span>
-                  )}
-                </div>
-              ),
-            },
-            {
-              key: 'reason',
-              label: t('decision'),
-              sortable: false,
-              render: (val) => <span className="font-bold text-slate-600">{val}</span>,
-            },
-          ]}
-          highlightRows={{
-            [bestWorst.bestId]: { className: 'bg-emerald-50/60 border-emerald-100' },
-            [bestWorst.worstId]: { className: 'bg-red-50/60 border-red-100' },
-          }}
-          pageSize={10}
-          isRTL={ar}
-          emptyMessage={ar ? 'لا توجد عمليات حديثة' : 'No recent operations'}
-          renderRow={(row) => (
-            <div className={`px-4 py-3 ${row.isBest ? 'bg-emerald-50/60' : row.isWorst ? 'bg-red-50/60' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-black text-slate-900 break-words leading-snug">{row.name || '—'}</p>
-                  <p className="text-xs font-bold text-slate-500 break-words leading-snug">{row.vendor || '—'}</p>
-                </div>
-                <p className="font-black text-blue-700 text-sm">{formatSmartNumber(row.price, 2)}</p>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[11px] font-black px-2 py-1 rounded-full border ${
-                      row.grade === 'A'
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        : row.grade === 'B'
-                        ? 'bg-amber-100 text-amber-700 border-amber-200'
-                        : 'bg-red-100 text-red-700 border-red-200'
-                    }`}
-                  >
-                    {row.dec}
-                  </span>
-                  {row.isBest && (
-                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                      {ar ? 'أفضل' : 'Best'}
-                    </span>
-                  )}
-                  {row.isWorst && (
-                    <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">
-                      {ar ? 'أضعف' : 'Worst'}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs font-bold text-slate-500 break-words text-right">{row.reason}</p>
-              </div>
-            </div>
-          )}
+    {/* عرض الرؤى قابلة للطي على الشاشات الصغيرة (موبايل) */}
+    <div className="phone:hidden elevated-card p-3">
+      <button
+        type="button"
+        onClick={() => setShowSecondaryInsights((v) => !v)}
+        className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
+      >
+        <span>{ar ? 'تفاصيل إضافية' : 'More Insights'}</span>
+        {/* أيقونة السهم تتعكس عند الفتح */}
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${showSecondaryInsights ? 'rotate-180' : ''}`}
         />
+      </button>
+
+      {/* المحتوى المطوي - يظهر عند الضغط على الزر */}
+      {showSecondaryInsights && (
+        <div className="mt-2 space-y-2">
+          {focusInsights.map((x, idx) => (
+            <div
+              key={`${x.label}-${idx}`}
+              className={`rounded-lg border px-3 py-2 ${
+                x.tone === 'good'
+                  ? 'border-emerald-200 bg-emerald-50/50'
+                  : 'border-red-200 bg-red-50/50'
+              }`}
+            >
+              <p className={`text-[10px] font-black ${x.tone === 'good' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {x.label}
+              </p>
+              <p className="text-sm font-semibold text-slate-800 break-words">{x.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </>
+)}
+
+
+{/* ===== بطاقة ترشيحات الموردين الرئيسية ===== */}
+<div className="elevated-card p-4 phone:p-5 md:p-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.98))]">
+
+  {/* رأس البطاقة: العنوان + أزرار الإجراءات */}
+  <div className="flex flex-col laptop:flex-row laptop:items-start laptop:justify-between gap-3 mb-1">
+
+    {/* أيقونة وعنوان القسم */}
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <div className="w-9 h-9 rounded-xl bg-[linear-gradient(135deg,#e8f0fb_0%,#dae6f5_100%)] text-[#4d6e9d] grid place-items-center ring-1 ring-slate-200">
+          <Award size={17} />
+        </div>
+        <div className="min-w-0">
+          <h3 className="font-black text-slate-900">
+            {ar ? 'ترشيحات الموردين' : 'Supplier recommendations'}
+          </h3>
+          <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+            {supplierComparisonScopeText}
+          </p>
+        </div>
       </div>
     </div>
-  );
-}
+
+    {/* شارة فرق السعر بين أفضل وأسوأ مورد + زر نسخ الملخص */}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* تظهر الشارة فقط إذا كان هناك موردان مختلفان */}
+      {supplierSummary.best &&
+        supplierSummary.worst &&
+        supplierSummary.best.vendor !== supplierSummary.worst.vendor && (
+          <span className="erp-subtle-chip">
+            <Award size={12} />
+            {ar
+              ? `فرق أفضل مورد: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`
+              : `Best supplier gap: ${formatSmartNumber(Math.max(0, Number(supplierSummary.worst.last || 0) - Number(supplierSummary.best.last || 0)), 1)} ${t('currency')}`}
+          </span>
+        )}
+
+      {/* زر نسخ ملخص الموردين للحافظة */}
+      <button
+        type="button"
+        onClick={handleCopySupplierSummary}
+        disabled={!supplierQuickSummaryText}
+        className="btn-surface inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-600 disabled:opacity-40"
+        title={ar ? 'نسخ ملخص الموردين' : 'Copy supplier summary'}
+      >
+        <Copy size={13} />
+        {ar ? 'نسخ الملخص' : 'Copy summary'}
+      </button>
+    </div>
+  </div>
+
+  {/* رسالة حالة النسخ: نجاح أو فشل */}
+  {copySummaryState !== 'idle' && (
+    <p className={`text-[10px] font-black mb-2 ${
+      copySummaryState === 'copied' ? 'text-emerald-700' : 'text-red-700'
+    }`}>
+      {copySummaryState === 'copied'
+        ? (ar ? 'تم نسخ الملخص بنجاح' : 'Summary copied successfully')
+        : (ar ? 'تعذر نسخ الملخص' : 'Failed to copy summary')}
+    </p>
+  )}
+
+  {/* منطقة المحتوى: ملخص القرار + بطاقات الموردين */}
+  <div className="mt-3 grid grid-cols-1 laptop:grid-cols-[1.2fr_2fr] gap-3">
+
+    {/* العمود الأيسر: ملخص القرار وجودة البيانات */}
+    <div className="erp-toolbar p-4 space-y-3">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+          {ar ? 'ملخص القرار' : 'Decision summary'}
+        </p>
+        {/* شرح منهجية الترتيب */}
+        <p className="mt-2 text-sm font-semibold text-slate-700">
+          {ar
+            ? 'الترتيب من الأرخص إلى الأعلى حسب متوسط الفترة الحالية داخل نطاق المقارنة الموضح.'
+            : 'Suppliers are ranked from cheapest to highest based on the current period average inside the displayed comparison scope.'}
+        </p>
+      </div>
+
+      {/* تفاصيل جودة البيانات ونطاق المقارنة */}
+      <div className="space-y-2 text-[11px] font-semibold text-slate-600">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          {ar
+            ? `جودة التحليل: ${supplierDataQuality.records} عملية عبر ${supplierDataQuality.vendors} مورد`
+            : `Data quality: ${supplierDataQuality.records} records across ${supplierDataQuality.vendors} suppliers`}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          {supplierComparisonScopeText}
+        </div>
+
+        {/* شارتا أفضل وأعلى المورّدين سعراً */}
+        {supplierSummary.best && supplierSummary.worst && (
+          <div className="flex flex-col gap-2">
+            <span className="status-good px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+              <CheckCircle size={12} />
+              {ar
+                ? `الأفضل حسب المتوسط: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} صنف)`
+                : `Best by average: ${supplierSummary.best.vendor} (${supplierSummary.best.itemCount || 0} items)`}
+            </span>
+            <span className="status-high px-2.5 py-2 rounded-xl border inline-flex items-center gap-1">
+              <AlertCircle size={12} />
+              {ar
+                ? `الأعلى سعراً: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} صنف)`
+                : `Highest price: ${supplierSummary.worst.vendor} (${supplierSummary.worst.itemCount || 0} items)`}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* العمود الأيمن: شبكة بطاقات الموردين المرشّحين (بحد أقصى 5 موردين) */}
+    <div className="grid grid-cols-1 tablet:grid-cols-2 laptop:grid-cols-3 gap-3">
+      {supplierRecommendations.slice(0, 5).map((s, idx) => (
+        <div
+          key={s.vendor}
+          className={`rounded-[20px] border px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] ${
+            idx === 0
+              ? 'border-emerald-300 bg-[linear-gradient(180deg,rgba(240,253,244,0.98),rgba(229,248,238,0.98))]' // بطاقة الترشيح الأول بلون أخضر مميز
+              : !s.aboveAvg
+                ? 'border-emerald-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(241,250,245,0.98))]' // مورد ضمن النطاق الجيد
+                : 'border-slate-200 bg-white' // مورد أعلى من المتوسط
+          }`}
+        >
+          {/* رأس بطاقة المورد: الاسم + الأيقونة */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {/* شارة "الترشيح الأول" تظهر فقط للمورد الأول */}
+              {idx === 0 && (
+                <span className="status-good inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-black">
+                  {ar ? 'الترشيح الأول' : 'Top pick'}
+                </span>
+              )}
+              <p className="font-black text-slate-900 break-words leading-snug">{s.vendor}</p>
+              <p className="text-[11px] font-bold text-slate-500 mt-1">
+                {ar
+                  ? `الاعتماد على ${s.sampleCount || 0} عملية عبر ${s.itemCount || 0} صنف`
+                  : `Based on ${s.sampleCount || 0} records across ${s.itemCount || 0} items`}
+              </p>
+            </div>
+            {/* أيقونة الجائزة للأول، وأيقونة المتجر للبقية */}
+            <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
+              idx === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {idx === 0 ? <Award size={16} /> : <Store size={16} />}
+            </div>
+          </div>
+
+          {/* تفاصيل السعر: آخر سعر شراء، متوسط الفترة، نطاق المقارنة */}
+          <div className="mt-4 space-y-2.5">
+
+            {/* آخر سعر شراء مع اسم الصنف والفرع */}
+            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                {ar ? 'آخر سعر شراء' : 'Last purchase price'}
+              </p>
+              <p className="mt-1 text-base font-black text-slate-900">
+                {formatSmartNumber(s.last, 1)}{' '}
+                <span className="text-[11px] font-bold text-slate-500">{t('currency')}</span>
+              </p>
+              {/* معلومات إضافية: اسم الصنف والفرع إن وُجدا */}
+              {(s.latestItemName || s.latestBranch) && (
+                <p className="mt-1 text-[11px] font-medium text-slate-500 break-words">
+                  {ar
+                    ? `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • فرع ${s.latestBranch}` : ''}`
+                    : `${s.latestItemName ? cleanItemLabel(s.latestItemName, s.latestItemCode) : ''}${s.latestBranch ? ` • ${s.latestBranch} branch` : ''}`}
+                </p>
+              )}
+            </div>
+
+            {/* متوسط الفترة الزمنية المحددة */}
+            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                {ar ? 'متوسط الفترة' : 'Period average'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-800">
+                {formatSmartNumber(s.avg, 1)} {t('currency')}
+              </p>
+            </div>
+
+            {/* نطاق المقارنة: عدد الفروع والأصناف المشمولة */}
+            <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                {ar ? 'نطاق المقارنة' : 'Comparison scope'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-800 break-words">
+                {supplierComparisonScopeText}
+              </p>
+              <p className="mt-1 text-[11px] font-medium text-slate-500">
+                {ar
+                  ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                  : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+              </p>
+            </div>
+          </div>
+
+          {/* شارة التقييم: ضمن النطاق الجيد أو أعلى من المتوسط */}
+          <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${
+            !s.aboveAvg ? 'status-good' : 'status-high'
+          }`}>
+            {!s.aboveAvg
+              ? (<><CheckCircle size={12} />{ar ? 'ضمن النطاق الجيد' : 'Within a good range'}</>)
+              : (<><AlertCircle size={12} />{ar ? 'أعلى من متوسط الفترة' : 'Above period average'}</>)}
+          </span>
+
+          {/* سبب الترشيح مبسّطاً */}
+          <p className={`text-xs font-bold mt-3 break-words ${s.aboveAvg ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {simplifySupplierReason(s.reason)}
+          </p>
+        </div>
+      ))}
+
+      {/* رسالة فارغة عند غياب بيانات كافية */}
+      {supplierRecommendations.length === 0 && (
+        <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
+          {ar
+            ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي'
+            : 'Recommendations appear once enough data exists in the current filter'}
+        </div>
+      )}
+    </div>
+
+  </div>
+</div>
+
+
+{/* ===== جدول آخر العمليات - مقارنة الأسعار مع آخر شراء ===== */}
+<div className="elevated-card overflow-hidden">
+
+  {/* رأس الجدول */}
+  <div className="px-4 md:px-6 py-4 border-b border-slate-100 flex items-start gap-2">
+    <Activity size={17} className="text-slate-600 mt-0.5 shrink-0" />
+    <div>
+      <h3 className="font-black text-slate-800">{ar ? 'آخر العمليات' : 'Latest Operations'}</h3>
+      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+        {ar ? 'مقارنة السعر مع آخر شراء' : 'Price compared with last purchase'}
+      </p>
+    </div>
+  </div>
+
+  {/*
+    مكوّن DataTable:
+    - يعالج كل صف بتوحيد تسمية القرار والسبب
+    - يميّز أفضل وأسوأ عملية بألوان مختلفة
+    - يدعم الترتيب والتصفح بين الصفحات
+  */}
+  <DataTable
+    data={recentOps.map((p) => {
+      // استخراج تسمية القرار حسب اللغة مع احتياطي للدرجة
+      const rawDecision = ar
+        ? (p.decisionAr || p.decisionEn || getDecisionLabelByGrade(p.grade))
+        : (p.decisionEn || p.decisionAr || getDecisionLabelByGrade(p.grade));
+      const dec = normalizeDecisionLabel(rawDecision);
+
+      // استخراج سبب القرار حسب اللغة وتبسيطه
+      const sourceReason = ar ? (p.reasonAr || p.reasonEn) : (p.reasonEn || p.reasonAr);
+      const reason = simplifyReasonText(sourceReason);
+
+      // تحديد إذا كانت هذه العملية هي الأفضل أو الأسوأ في الفترة
+      const isBest = p.id === bestWorst.bestId;
+      const isWorst = p.id === bestWorst.worstId;
+
+      return { ...p, dec, reason, isBest, isWorst };
+    })}
+
+    columns={[
+      { key: 'vendor',  label: t('vendor'), sortable: true },
+      { key: 'name',    label: t('item'),   sortable: true },
+
+      // عمود السعر: قيمة بارزة باللون الأزرق
+      {
+        key: 'price',
+        label: t('price'),
+        sortable: true,
+        render: (val) => (
+          <span className="font-black text-blue-700">
+            {formatSmartNumber(val, 2)} {t('currency')}
+          </span>
+        ),
+      },
+
+      // عمود الدرجة: شارة ملونة + علامة أفضل/أسوأ
+      {
+        key: 'grade',
+        label: t('grade'),
+        sortable: true,
+        render: (val, row) => (
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+              val === 'A' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : val === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
+              : 'bg-red-100 text-red-700 border-red-200'
+            }`}>
+              {row.dec}
+            </span>
+            {row.isBest  && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">{ar ? 'أفضل' : 'Best'}</span>}
+            {row.isWorst && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">{ar ? 'أضعف' : 'Worst'}</span>}
+          </div>
+        ),
+      },
+
+      // عمود القرار: نص السبب المبسّط
+      {
+        key: 'reason',
+        label: t('decision'),
+        sortable: false,
+        render: (val) => <span className="font-bold text-slate-600">{val}</span>,
+      },
+    ]}
+
+    /* تلوين خلفية صفوف أفضل وأسوأ عملية */
+    highlightRows={{
+      [bestWorst.bestId]:  { className: 'bg-emerald-50/60 border-emerald-100' },
+      [bestWorst.worstId]: { className: 'bg-red-50/60 border-red-100' },
+    }}
+
+    pageSize={10}
+    isRTL={ar}
+    emptyMessage={ar ? 'لا توجد عمليات حديثة' : 'No recent operations'}
+
+    /* تخطيط مخصص للموبايل: عرض مدمج بدلاً من جدول */
+    renderRow={(row) => (
+      <div className={`px-4 py-3 ${row.isBest ? 'bg-emerald-50/60' : row.isWorst ? 'bg-red-50/60' : ''}`}>
+
+        {/* السطر الأول: اسم الصنف + المورد + السعر */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-black text-slate-900 break-words leading-snug">{row.name || '—'}</p>
+            <p className="text-xs font-bold text-slate-500 break-words leading-snug">{row.vendor || '—'}</p>
+          </div>
+          <p className="font-black text-blue-700 text-sm">{formatSmartNumber(row.price, 2)}</p>
+        </div>
+
+        {/* السطر الثاني: شارة الدرجة + سبب القرار */}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-black px-2 py-1 rounded-full border ${
+              row.grade === 'A' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : row.grade === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
+              : 'bg-red-100 text-red-700 border-red-200'
+            }`}>
+              {row.dec}
+            </span>
+            {row.isBest  && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">{ar ? 'أفضل' : 'Best'}</span>}
+            {row.isWorst && <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-100 text-red-700">{ar ? 'أضعف' : 'Worst'}</span>}
+          </div>
+          <p className="text-xs font-bold text-slate-500 break-words text-right">{row.reason}</p>
+        </div>
+
+      </div>
+    )}
+  />
+</div>
 
 // ==========================================
 // 3. شاشة تسجيل الفاتورة
