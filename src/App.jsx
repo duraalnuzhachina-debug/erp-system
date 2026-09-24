@@ -14,7 +14,7 @@ import {
   Settings, Package, Store, MapPin, Trash2, Wallet, ArrowDownRight, ArrowUpRight, AlertTriangle,
   PieChart, Award, ThumbsDown, Activity, FileText, Printer, X, CalendarDays, Download, Copy,
   Languages, LogOut, LogIn, User, UserCircle, Filter, SlidersHorizontal, Info, Zap, Target,
-  TrendingUp as TrendUp, ShieldAlert, ChevronsLeft, ChevronsRight
+  TrendingUp as TrendUp, ShieldAlert, ChevronsLeft, ChevronsRight, Building2
 } from './lucideIcons';
 import { 
   LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
