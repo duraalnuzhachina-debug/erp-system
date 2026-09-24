@@ -5,6 +5,7 @@ export { default as ArrowDownRight } from 'lucide-react/dist/esm/icons/arrow-dow
 export { default as ArrowUpRight } from 'lucide-react/dist/esm/icons/arrow-up-right.js';
 export { default as Award } from 'lucide-react/dist/esm/icons/award.js';
 export { default as BarChart3 } from 'lucide-react/dist/esm/icons/chart-column.js';
+export { default as Building2 } from 'lucide-react/dist/esm/icons/building-2.js';
 export { default as CalendarDays } from 'lucide-react/dist/esm/icons/calendar-days.js';
 export { default as CheckCircle } from 'lucide-react/dist/esm/icons/circle-check-big.js';
 export { default as ChevronDown } from 'lucide-react/dist/esm/icons/chevron-down.js';
