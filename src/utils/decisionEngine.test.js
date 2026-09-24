@@ -8,8 +8,13 @@ import {
   calculateRootCause,
   enrichPurchasesWithScores
 } from './decisionEngine';
+import { Building2 } from '../lucideIcons';
 
 describe('decisionEngine', () => {
+  it('exports the building icon used in the purchase analysis modal', () => {
+    expect(Building2).toBeDefined();
+  });
+
   describe('filterOutliers', () => {
     it('removes a clear high outlier while keeping normal prices', () => {
       expect(filterOutliers([100, 102, 101, 260])).toEqual([100, 102, 101]);
