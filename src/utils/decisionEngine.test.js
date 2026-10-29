@@ -21,8 +21,12 @@ describe('decisionEngine', () => {
       expect(filterOutliers([100, 102, 101, 260])).toEqual([100, 102, 101]);
     });
 
-    it('keeps at least the latest price when fallback filtering removes everything', () => {
-      expect(filterOutliers([1, 1, 1, 1000])).toEqual([1000]);
+    it('uses the median when MAD is zero so an isolated high outlier is removed', () => {
+      expect(filterOutliers([1, 1, 1, 1000])).toEqual([1, 1, 1]);
+    });
+
+    it('does not guess which of only two prices is an outlier', () => {
+      expect(filterOutliers([100, 1000])).toEqual([100, 1000]);
     });
 
     it('handles empty or very small arrays safely', () => {
