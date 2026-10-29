@@ -89,6 +89,8 @@ describe('decisionEngine', () => {
   describe('calculateDecisionScore', () => {
     it('returns null when there is not enough valid history', () => {
       expect(calculateDecisionScore(100, [{ price: 99, timestamp: 1 }])).toBeNull();
+      expect(calculateDecisionScore(100, [])).toBeNull();
+      expect(calculateDecisionScore(100, [{ price: 99, timestamp: 1 }, { price: 0, timestamp: 2 }])).toBeNull();
     });
 
     it('downgrades to Monitor when history is good but sample size is still thin', () => {
