@@ -2850,7 +2850,7 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
                 </div>
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Database size={14}/> {t('qty')}</label>
-                   <input type="number" required className={`input-field text-center ${inlineValidation.qtyError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.qty} onChange={e=>setFormField('qty', e.target.value)} />
+                   <input type="number" min="0.0001" step="any" required className={`input-field text-center ${inlineValidation.qtyError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.qty} onChange={e=>setFormField('qty', e.target.value)} />
                    {inlineValidation.qtyError && (
                      <p className="text-[10px] font-black text-red-600">{inlineValidation.qtyError}</p>
                    )}
@@ -3473,11 +3473,11 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase">{t('qty')}</p>
-                    <p className="mt-0.5 text-xs font-black text-slate-800">{formatSmartNumber(p.qty, 0)}</p>
+                    <p className="mt-0.5 text-xs font-black text-slate-800">{formatSmartNumber(p.qty, 3)}</p>
                   </div>
                   <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase">{ar ? 'الإجمالي' : 'Total'}</p>
-                    <p className="mt-0.5 text-xs font-black text-slate-800 break-all">{formatSmartNumber(p.total ?? (Number(p.price || 0) * Number(p.qty || 0)), 2)} SAR</p>
+                    <p className="mt-0.5 text-xs font-black text-slate-800 break-all">{formatSmartNumber(getSafePurchaseTotal(p), 2)} SAR</p>
                   </div>
                 </div>
 
@@ -4998,7 +4998,7 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
             {tab==='items' && (
               <>
                 <input type="text" placeholder="Code" className="input-field flex-1 bg-slate-50 text-slate-500" value={nextItemCode} readOnly />
-                <input type="number" placeholder={t('ref_price')} className="input-field flex-1" value={price} onChange={e=>setPrice(e.target.value)} />
+                <input type="number" min="0.01" step="0.01" placeholder={t('ref_price')} className="input-field flex-1" value={price} onChange={e=>setPrice(e.target.value)} />
               </>
             )}
             <button onClick={handleAdd} className="btn-surface w-full tablet:w-auto px-6 tablet:px-10 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shrink-0 active:scale-95"><PlusCircle size={22}/> Add</button>
@@ -5030,6 +5030,8 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
                               />
                               <input
                                 type="number"
+                                min="0.01"
+                                step="0.01"
                                 className="input-field w-full"
                                 value={editingPrice}
                                 onChange={(e) => setEditingPrice(e.target.value)}
