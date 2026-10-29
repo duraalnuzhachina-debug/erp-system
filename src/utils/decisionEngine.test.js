@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calculateBaseMetrics,
+  calculateImpact,
   calculateDecisionScore,
   filterOutliers,
   getValidPrices,
@@ -49,6 +50,13 @@ describe('decisionEngine', () => {
       ];
 
       expect(getValidPrices(purchases)).toEqual([50]);
+    });
+  });
+
+  describe('calculateImpact', () => {
+    it('uses fractional quantities and rejects invalid quantities', () => {
+      expect(calculateImpact(110, 100, 0.5)).toBe(5);
+      expect(calculateImpact(110, 100, Number.NaN)).toBe(0);
     });
   });
 
@@ -106,6 +114,15 @@ describe('decisionEngine', () => {
         sampleCount: 2,
       });
       expect(result.score).toBe(37);
+    });
+
+    it('does not round fractional quantity up for impact guardrails', () => {
+      const result = calculateDecisionScore(101, [
+        { price: 100, timestamp: 1 },
+        { price: 100, timestamp: 2 },
+        { price: 100, timestamp: 3 },
+      ], { currentQuantity: 0.5, maxBuyIncreaseAbs: 2, forceNoBuyIncreaseAbs: 2, forceNoBuyImpactAbs: 1 });
+      expect(result.grade).toBe('A');
     });
 
     it('blocks purchases when the direct increase breaches safety guardrails', () => {
