@@ -1450,7 +1450,6 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     if (!sortedRecentAll.length) return [];
     const now = new Date();
     const nowTs = now.getTime();
-    const dayMs = 24 * 60 * 60 * 1000;
 
     if (timeFilter === 'realtime') {
       return sortedRecentAll;
@@ -3806,7 +3805,6 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     }
 
     const now = new Date().getTime();
-    const dayMs = 24 * 60 * 60 * 1000;
 
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const days = timeFilter === 'weekly' ? 7 : 30;
