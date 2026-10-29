@@ -30,6 +30,7 @@ describe('decisionEngine', () => {
     });
 
     it('handles empty or very small arrays safely', () => {
+      expect(filterOutliers(null)).toEqual([]);
       expect(filterOutliers([])).toEqual([]);
       expect(filterOutliers([50])).toEqual([50]);
     });
