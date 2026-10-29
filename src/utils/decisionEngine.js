@@ -25,7 +25,7 @@ export const OUTLIER_LOWER_BOUND = 0.5;  // 50% of average
 export const OUTLIER_UPPER_BOUND = 2.0;  // 200% of average
 export const MIN_VALID_RECORDS = 2;
 
-const getRecordTimestamp = (record, fallback = 0) => {
+export const getRecordTimestamp = (record, fallback = 0) => {
   if (!record || typeof record !== 'object') return fallback;
   const ts = Number(record.timestamp);
   if (Number.isFinite(ts) && ts > 0) return ts;
@@ -36,7 +36,7 @@ const getRecordTimestamp = (record, fallback = 0) => {
   return fallback;
 };
 
-const getInvoiceTimestamp = (record, fallback = 0) => {
+export const getInvoiceTimestamp = (record, fallback = 0) => {
   const invoiceDate = String(record?.date || '').trim().slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
     const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
@@ -45,7 +45,7 @@ const getInvoiceTimestamp = (record, fallback = 0) => {
   return getRecordTimestamp(record, fallback);
 };
 
-const comparePurchaseChronology = (a, b) => {
+export const comparePurchaseChronology = (a, b) => {
   const invoiceDifference = getInvoiceTimestamp(a, 0) - getInvoiceTimestamp(b, 0);
   return invoiceDifference || getRecordTimestamp(a, 0) - getRecordTimestamp(b, 0);
 };
