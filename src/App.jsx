@@ -44,8 +44,6 @@ import {
   comparePurchaseChronology,
 } from './utils/decisionEngine';
 
-const MotionRef = motion;
-
 const COMPANY_LOGO = '/brand-logo.png';
 const EMPTY_LIST = Object.freeze([]);
 const DASHBOARD_FILTERS_KEY = 'dashboard_filters_v1';
