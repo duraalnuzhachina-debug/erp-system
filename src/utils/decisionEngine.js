@@ -14,7 +14,6 @@ export const DEFAULT_ENGINE_SETTINGS = {
   gradeB: 5,
   gradeC: -10,
   riskyThreshold: 0.10,
-  badSupplierThreshold: -5,
   sensitivity: 1,
   maxBuyIncreaseAbs: 1,
   forceNoBuyIncreaseAbs: 2,
