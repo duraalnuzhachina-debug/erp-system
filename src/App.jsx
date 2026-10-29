@@ -2106,7 +2106,6 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملاحظات سريعة' : 'Quick notes'}</p>
               <p className="mt-2 text-sm font-semibold text-slate-800">{marketStatus.hint}</p>
-                  <p className="mt-2 text-xs font-medium text-slate-500">{supplierComparisonScopeText}</p>
               {actionAlerts.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   {actionAlerts.map((note, index) => (
@@ -2383,15 +2382,11 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
-                    <p className="mt-1 text-[11px] font-medium text-slate-500">
-                      {ar
-                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
-                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
-                    </p>
-                  </div>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {ar
+                      ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                      : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+                  </p>
                 </div>
                 <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
                   {!s.aboveAvg
@@ -3866,6 +3861,8 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   }, [selectedItem, selectedItemCode, timeFilter, customFrom, customTo, selectedBranch, ar]);
 
   const trendData = useMemo(() => {
+    // A price line must represent one item; comparing different items' unit prices is misleading.
+    if (selectedItemCode === 'all') return [];
     const ordered = [...selectedItemOps]
       .map((p) => {
         const price = cleanPriceValue(p.price);
@@ -3875,7 +3872,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .filter(p => p !== null)
       .sort((a, b) => a.dateValue - b.dateValue);
 
-    const limited = timeFilter === 'realtime' ? ordered : ordered.slice(-12);
+    const limited = timeFilter === 'realtime' ? ordered.slice(-30) : ordered.slice(-12);
     if (limited.length < 3) return [];
 
     return limited.map((p, idx) => ({
@@ -3894,7 +3891,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       fullDate: p.date || (ar ? 'بدون تاريخ' : 'No date'),
       price: p.price,
     }));
-  }, [selectedItemOps, ar, timeFilter, isPhone]);
+  }, [selectedItemOps, selectedItemCode, ar, timeFilter, isPhone]);
 
   const trendChartWidth = useMemo(() => {
     if (timeFilter !== 'realtime') return null;
@@ -3972,7 +3969,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .slice(0, isPhone ? 5 : 8);
   }, [scopedByBranch, availableBranches, isPhone]);
-  const showTrendValueLabels = !isPhone || trendData.length <= 6;
+  const showTrendValueLabels = trendData.length <= (isPhone ? 6 : 12);
   const showSupplierValueLabels = !isPhone || supplierData.length <= 5;
   const showItemValueLabels = !isPhone || itemImpactData.length <= 5;
   const showBranchValueLabels = !isPhone || branchData.length <= 5;
@@ -4300,10 +4297,15 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           </div>
         </div>
 
-        {selectedItemOps.length === 0 && (
+        {selectedItemCode === 'all' && (
+          <p className="text-sm font-semibold text-slate-500 text-center py-8">
+            {ar ? 'اختر صنفًا محددًا لعرض اتجاه سعره؛ جمع أسعار أصناف مختلفة في خط واحد قد يعطي مقارنة مضللة.' : 'Select one item to view its price trend; combining different items in one line can be misleading.'}
+          </p>
+        )}
+        {selectedItemCode !== 'all' && selectedItemOps.length === 0 && (
           <p className="text-sm font-black text-slate-400 text-center py-8">{ar ? 'لا توجد بيانات كافية في هذه الفترة' : 'Not enough data in this range'}</p>
         )}
-        {selectedItemOps.length > 0 && (
+        {selectedItemCode !== 'all' && selectedItemOps.length > 0 && (
           <>
             {!trendData.length && <p className="text-xs font-bold text-slate-500 mb-3">{ar ? 'البيانات غير كافية للعرض' : 'Not enough data to display'}</p>}
             {timeFilter === 'realtime' ? (
@@ -4312,7 +4314,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
                   <ResponsiveContainer width="100%" height={isPhone ? 216 : 244}>
                     <LineChart data={trendData} margin={{top: isPhone ? 14 : 18, right: isPhone ? 14 : 20, left: isPhone ? 10 : 14, bottom: isPhone ? 18 : 14}}>
                       <CartesianGrid strokeDasharray="3 3" stroke={analyticsPalette.grid}/>
-                      <XAxis dataKey="tickLabel" interval={0} tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} tickMargin={isPhone ? 10 : 8} minTickGap={isPhone ? 18 : 12}/>
+                      <XAxis dataKey="tickLabel" interval="preserveStartEnd" tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} tickMargin={isPhone ? 10 : 8} minTickGap={isPhone ? 18 : 12}/>
                       <YAxis tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} width={isPhone ? 56 : 64}/>
                       <RechartsTooltip
                         contentStyle={{borderRadius:'14px', border:'1px solid #dbe3ed', backgroundColor:'rgba(255,255,255,0.97)', padding:'10px 12px', boxShadow:'0 14px 30px rgba(28,42,61,0.10)'}}
