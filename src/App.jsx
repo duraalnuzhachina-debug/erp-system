@@ -346,6 +346,7 @@ function App() {
     };
     const onRealtimeError = (key, err) => {
       if (!active) return;
+      syncedCollections.delete(key);
       if (import.meta.env.DEV) console.error('Realtime listener error for ' + key + ':', err);
       setSyncState((prev) => ({ ...prev, [key]: false }));
       setNotification({
@@ -4155,7 +4156,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         {text}
       </text>
     );
-  }, [formatAxisName, yAxisLabelWidth, isPhone]);
+  }, [formatAxisName, yAxisLabelWidth, isPhone, isTablet]);
 
   const renderSupplierAxisTick = useCallback((props) => {
     const { x, y, payload } = props || {};
@@ -4181,7 +4182,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         {text}
       </text>
     );
-  }, [formatAxisName, supplierYAxisLabelWidth, isPhone]);
+  }, [formatAxisName, supplierYAxisLabelWidth, isPhone, isTablet]);
 
   const renderSupplierDiffLabel = (props) => {
     const { x, y, width, height, value } = props || {};
