@@ -102,7 +102,8 @@ export const cleanPriceValue = (value) => {
 
 export const filterOutliers = (prices) => {
   // With only two observations there is no defensible way to identify which one is an outlier.
-  if (!Array.isArray(prices) || prices.length < 3) return prices || [];
+  if (!Array.isArray(prices)) return [];
+  if (prices.length < 3) return prices;
 
   const med = median(prices);
   const deviations = prices.map((p) => Math.abs(p - med));
