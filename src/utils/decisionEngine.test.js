@@ -173,6 +173,21 @@ describe('decisionEngine', () => {
   });
 
   describe('enrichPurchasesWithScores', () => {
+    it('does not use future invoice dates when scoring a backdated purchase', () => {
+      const purchases = [
+        { id: 'old', code: 'A', price: 100, date: '2026-01-01', timestamp: 500 },
+        { id: 'future', code: 'A', price: 1000, date: '2026-02-01', timestamp: 400 },
+        { id: 'backdated', code: 'A', price: 110, date: '2026-01-15', timestamp: 600 },
+      ];
+
+      const enriched = enrichPurchasesWithScores(purchases, {});
+      const backdated = enriched.find((purchase) => purchase.id === 'backdated');
+
+      // Only the January 1 record is historical for this purchase; the February invoice is future data.
+      expect(backdated.score).toBeNull();
+      expect(backdated.grade).toBeNull();
+    });
+
     it('processes an array of purchases and attaches scores using historical contexts', () => {
       const purchases = [
         { id: 1, code: 'ITEM1', price: 100, timestamp: 1000 },
