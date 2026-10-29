@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from '../lucideIcons';
 
 /**
@@ -25,6 +25,12 @@ const DataTable = ({
 }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
+  const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Math.floor(Number(pageSize)) : 10;
+
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(data.length / safePageSize));
+    setCurrentPage((page) => Math.min(page, lastPage));
+  }, [data.length, safePageSize]);
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -37,9 +43,11 @@ const DataTable = ({
       if (aVal == null) return sortConfig.direction === 'asc' ? 1 : -1;
       if (bVal == null) return sortConfig.direction === 'asc' ? -1 : 1;
 
-      // Numeric comparison
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      // Numeric comparison also handles numeric strings such as stored prices/codes.
+      const aNum = typeof aVal === 'number' ? aVal : (typeof aVal === 'string' && aVal.trim() !== '' && /^[-+]?\\d+(?:\\.\\d+)?$/.test(aVal.trim()) ? Number(aVal) : NaN);
+      const bNum = typeof bVal === 'number' ? bVal : (typeof bVal === 'string' && bVal.trim() !== '' && /^[-+]?\\d+(?:\\.\\d+)?$/.test(bVal.trim()) ? Number(bVal) : NaN);
+      if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
+        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
       }
 
       // String comparison
@@ -57,11 +65,11 @@ const DataTable = ({
 
   // Paginate
   const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize]);
+    const start = (currentPage - 1) * safePageSize;
+    return sortedData.slice(start, start + safePageSize);
+  }, [sortedData, currentPage, safePageSize]);
 
-  const totalPages = Math.ceil(sortedData.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / safePageSize));
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
