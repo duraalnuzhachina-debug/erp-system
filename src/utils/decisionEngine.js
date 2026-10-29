@@ -20,8 +20,7 @@ export const DEFAULT_ENGINE_SETTINGS = {
   forceNoBuyImpactAbs: 200,
 };
 
-export const ROOT_CAUSE_MARKET_SIMILARITY = 0.03;
-export const OUTLIER_LOWER_BOUND = 0.5;  // 50% of average
+export export const OUTLIER_LOWER_BOUND = 0.5;  // 50% of average
 export const OUTLIER_UPPER_BOUND = 2.0;  // 200% of average
 export const MIN_VALID_RECORDS = 2;
 
