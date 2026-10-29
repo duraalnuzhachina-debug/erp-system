@@ -121,6 +121,11 @@ const getInvoiceTimestamp = (record) => {
   return getRecordTimestamp(record);
 };
 
+const comparePurchaseChronology = (a, b) => {
+  const invoiceDifference = getInvoiceTimestamp(a) - getInvoiceTimestamp(b);
+  return invoiceDifference || getRecordTimestamp(a) - getRecordTimestamp(b);
+};
+
 const getSafePurchaseQuantity = (record) => {
   if (record?.qty == null || String(record.qty).trim() === '') return 1;
   const qty = Number(record.qty);
@@ -2557,11 +2562,13 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
 
   const itemPurchases = useMemo(() => {
     if (!formData.code) return EMPTY_LIST;
+    const enteredInvoiceEnd = formData.date ? new Date(formData.date + 'T23:59:59').getTime() : Infinity;
+    const safeInvoiceEnd = Number.isFinite(enteredInvoiceEnd) ? enteredInvoiceEnd : Infinity;
     return purchases
-      .filter(p => p.code === formData.code)
-      .map(p => ({ ...p, dateValue: getRecordTimestamp(p) }))
+      .filter((purchase) => purchase.code === formData.code && getInvoiceTimestamp(purchase) <= safeInvoiceEnd)
+      .map((purchase) => ({ ...purchase, dateValue: getInvoiceTimestamp(purchase) }))
       .sort((a, b) => a.dateValue - b.dateValue || getRecordTimestamp(a) - getRecordTimestamp(b));
-  }, [purchases, formData.code]);
+  }, [purchases, formData.code, formData.date]);
 
   const currentPrice = Number(formData.price || 0);
   const qtyValue = Number(formData.qty || 0);
@@ -3241,19 +3248,22 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   }, [ar, clearDeleteBackup, deleteBackup, isRestoringDeleted, purchases.length, showMsg]);
 
   // Build deal analysis for selected item
+  const selectedDealHistory = useMemo(() => {
+    if (!selectedDeal) return EMPTY_LIST;
+    return purchases
+      .filter((purchase) => purchase.code === selectedDeal.code && purchase.id !== selectedDeal.id && comparePurchaseChronology(purchase, selectedDeal) < 0)
+      .sort(comparePurchaseChronology);
+  }, [selectedDeal, purchases]);
+
   const dealAnalysis = useMemo(() => {
     if (!selectedDeal) return null;
-    const history = purchases
-      .filter(p => p.code === selectedDeal.code && p.id !== selectedDeal.id)
-      .map(p => ({ price: p.price }));
-    return calculateDecisionScore(selectedDeal.price, history, settings);
-  }, [selectedDeal, purchases, settings]);
+    return calculateDecisionScore(selectedDeal.price, selectedDealHistory, settings);
+  }, [selectedDeal, selectedDealHistory, settings]);
 
   const dealRootCause = useMemo(() => {
     if (!selectedDeal) return null;
-    const history = purchases.filter(p => p.code === selectedDeal.code && p.id !== selectedDeal.id);
-    return calculateRootCause(selectedDeal, history, settings);
-  }, [selectedDeal, purchases, settings]);
+    return calculateRootCause(selectedDeal, selectedDealHistory, settings);
+  }, [selectedDeal, selectedDealHistory, settings]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 animate-in fade-in duration-700">
