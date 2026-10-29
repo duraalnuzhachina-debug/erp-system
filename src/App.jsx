@@ -1680,15 +1680,17 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .forEach((purchase) => {
         const code = String(purchase.code || '').trim();
         const price = cleanPriceValue(purchase.price);
-        const qty = Number(purchase.qty) || 1;
-
         if (!purchase.id || !code || price === null) return;
 
         const history = historyByCode.get(code) || [];
+        const qty = getSafePurchaseQuantity(purchase);
         let savings = 0;
 
-        if (history.length >= 2) {
-          const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
+        if (qty > 0 && history.length >= 2) {
+          const baselinePrices = filterOutliers(history);
+          const baseline = baselinePrices.length
+            ? baselinePrices.reduce((sum, value) => sum + value, 0) / baselinePrices.length
+            : 0;
           if (baseline > price) savings = (baseline - price) * qty;
         } else {
           const impact = Number(purchase.impact);
