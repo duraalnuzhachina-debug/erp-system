@@ -1583,7 +1583,8 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   }, [currentItemPrices, filteredOps, ar]);
 
   const supplierRecommendations = useMemo(() => {
-    if (!filteredOps.length) return [];
+    // Unit prices across different items are not comparable; only rank vendors for one selected item.
+    if (!filteredOps.length || focusMode !== 'item' || !selectedValue) return [];
 
     const grouped = {};
     filteredOps.forEach((p) => {
@@ -1659,19 +1660,15 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .filter(Boolean)
       .sort((a, b) => a.rankScore - b.rankScore)
       .slice(0, 5);
-  }, [filteredOps, itemAveragePrice, ar]);
+  }, [filteredOps, itemAveragePrice, ar, focusMode, selectedValue]);
 
   const supplierComparisonScopeText = useMemo(() => {
     if (focusMode === 'item' && selectedValue) {
       return ar ? `المقارنة لهذا الصنف فقط: ${selectedFocusEntity}` : `Comparison for this item only: ${selectedFocusEntity}`;
     }
-    if (focusMode === 'branch' && selectedValue) {
-      return ar ? `المقارنة لكل أصناف الفرع: ${selectedFocusEntity}` : `Comparison for all items in branch: ${selectedFocusEntity}`;
-    }
-    if (focusMode === 'supplier' && selectedValue) {
-      return ar ? 'هذا العرض يوضح أداء المورد المحدد عبر الأصناف داخل الفترة.' : 'This view shows the selected supplier performance across items in the period.';
-    }
-    return ar ? 'هذه الأرقام تمثل متوسط المورد عبر جميع الأصناف داخل الفلتر الحالي، وليست سعر صنف واحد.' : 'These numbers show the supplier average across all items in the current filter, not a single item price.';
+    return ar
+      ? 'اختر صنفًا محددًا لمقارنة الموردين بعدالة؛ متوسط أسعار أصناف مختلفة لا يصلح للمقارنة المباشرة.'
+      : 'Select one item to compare suppliers fairly; average prices across different items are not directly comparable.';
   }, [focusMode, selectedValue, selectedFocusEntity, ar]);
 
   const savingsByPurchaseId = useMemo(() => {
@@ -2398,7 +2395,9 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             ))}
             {supplierRecommendations.length === 0 && (
               <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
-                {ar ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي' : 'Recommendations appear once enough data exists in the current filter'}
+                {focusMode === 'item' && !selectedValue
+                  ? (ar ? 'اختر صنفًا محددًا أولًا؛ مقارنة متوسط أسعار أصناف مختلفة قد تكون مضللة.' : 'Select a specific item first; comparing average prices across different items can be misleading.')
+                  : (ar ? 'لا توجد بيانات كافية لمقارنة الموردين لهذا الصنف ضمن الفترة المحددة.' : 'Not enough data to compare suppliers for this item in the selected period.')}
               </div>
             )}
           </div>
