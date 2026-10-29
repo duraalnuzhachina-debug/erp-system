@@ -101,29 +101,28 @@ export const cleanPriceValue = (value) => {
 };
 
 export const filterOutliers = (prices) => {
-  if (prices.length < MIN_VALID_RECORDS) return prices;
+  // With only two observations there is no defensible way to identify which one is an outlier.
+  if (!Array.isArray(prices) || prices.length < 3) return prices || [];
 
-  // Robust filter using median + MAD to resist skew from extreme values.
-  if (prices.length >= 4) {
-    const med = median(prices);
-    const deviations = prices.map((p) => Math.abs(p - med));
-    const mad = median(deviations);
-    if (mad > 1e-6) {
-      const sigma = 1.4826 * mad;
-      const low = med - (3 * sigma);
-      const high = med + (3 * sigma);
-      const robustFiltered = prices.filter((p) => p >= low && p <= high);
-      if (robustFiltered.length >= MIN_VALID_RECORDS) return robustFiltered;
-    }
+  const med = median(prices);
+  const deviations = prices.map((p) => Math.abs(p - med));
+  const mad = median(deviations);
+
+  if (mad > 1e-6) {
+    const sigma = 1.4826 * mad;
+    const low = med - (3 * sigma);
+    const high = med + (3 * sigma);
+    const robustFiltered = prices.filter((p) => p >= low && p <= high);
+    if (robustFiltered.length >= MIN_VALID_RECORDS) return robustFiltered;
+    return prices;
   }
 
-  const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
-  if (avg <= 0) return prices;
-  const filtered = prices.filter(
-    (p) => p >= OUTLIER_LOWER_BOUND * avg && p <= OUTLIER_UPPER_BOUND * avg
-  );
-  // ✅ ضمان بقاء نقطة واحدة على الأقل - إذا لم يبقَ شيء، أرجع آخر نقطة (الأحدث)
-  return filtered.length > 0 ? filtered : [prices[prices.length - 1]];
+  // When MAD is zero, anchor the fallback to the median—not the mean, which an extreme
+  // value can drag toward itself (e.g. [1, 1, 1, 1000]).
+  const low = med * OUTLIER_LOWER_BOUND;
+  const high = med * OUTLIER_UPPER_BOUND;
+  const filtered = prices.filter((p) => p >= low && p <= high);
+  return filtered.length >= MIN_VALID_RECORDS ? filtered : prices;
 };
 
 export const getValidPrices = (purchases, maxRecords = 10) => {
