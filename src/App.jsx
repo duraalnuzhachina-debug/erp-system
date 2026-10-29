@@ -9,17 +9,16 @@ import {
 
 // الأيقونات
 import { 
-  ShoppingCart, Database, PlusCircle, TrendingUp, TrendingDown, Minus, Save, RotateCcw,
+  ShoppingCart, Database, PlusCircle, TrendingUp, TrendingDown, Save, RotateCcw,
   BarChart3, Search, CheckCircle, AlertCircle, ChevronDown,
-  Settings, Package, Store, MapPin, Trash2, Wallet, ArrowDownRight, ArrowUpRight, AlertTriangle,
-  PieChart, Award, ThumbsDown, Activity, FileText, Printer, X, CalendarDays, Download, Copy,
-  Languages, LogOut, LogIn, User, UserCircle, Filter, SlidersHorizontal, Info, Zap, Target,
-  TrendingUp as TrendUp, ShieldAlert, ChevronsLeft, ChevronsRight, Building2
+  Settings, Package, Store, MapPin, Trash2, Wallet, AlertTriangle,
+  PieChart, Award, Activity, FileText, X, CalendarDays, Download, Copy,
+  Languages, LogOut, LogIn, Filter, SlidersHorizontal, Info, Zap,
+  ChevronsLeft, ChevronsRight, Building2
 } from './lucideIcons';
 import { 
-  LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Legend, LabelList,
-  PieChart as RechartsPie, Pie, Cell, ReferenceLine
+  LineChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell
 } from 'recharts';
 import ErrorBoundary from './components/ErrorBoundary';
 import DataTable from './components/DataTable';
@@ -40,9 +39,10 @@ import {
   getGradeStyle,
   getDecisionLabelByGrade,
   enrichPurchasesWithScores,
+  getRecordTimestamp,
+  getInvoiceTimestamp,
+  comparePurchaseChronology,
 } from './utils/decisionEngine';
-
-const MotionRef = motion;
 
 const COMPANY_LOGO = '/brand-logo.png';
 const EMPTY_LIST = Object.freeze([]);
@@ -95,23 +95,24 @@ const readPurchasesDeleteBackup = () => {
   }
 };
 
-const getRecordTimestamp = (record) => {
-  const ts = Number(record?.timestamp);
-  if (Number.isFinite(ts) && ts > 0) return ts;
-  if (record?.date) {
-    const parsed = new Date(record.date).getTime();
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
+const toLocalDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+};
+
+const getSafePurchaseQuantity = (record) => {
+  if (record?.qty == null || String(record.qty).trim() === '') return 1;
+  const qty = Number(record.qty);
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
 };
 
 const getSafePurchaseTotal = (record) => {
   const storedTotal = Number(record?.total);
-  if (Number.isFinite(storedTotal)) return storedTotal;
-
+  if (record?.total != null && String(record.total).trim() !== '' && Number.isFinite(storedTotal) && storedTotal > 0) return storedTotal;
   const price = cleanPriceValue(record?.price);
-  const qty = Number(record?.qty) || 1;
-  return price !== null ? price * qty : 0;
+  return price !== null ? price * getSafePurchaseQuantity(record) : 0;
 };
 
 const getLocalizedDecisionLabel = (grade, ar) => {
@@ -159,11 +160,11 @@ const normalizeSearchValue = (value) => {
 
 function App() {
   const savedDashboardFilters = useMemo(() => readDashboardFilters(), []);
-  const defaultCustomTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const defaultCustomTo = useMemo(() => toLocalDateInputValue(new Date()), []);
   const defaultCustomFrom = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return toLocalDateInputValue(d);
   }, []);
   const [user, setUser] = useState(null);
   const [lang, setLang] = useState(() => {
@@ -335,86 +336,53 @@ function App() {
 
   // جلب البيانات
   useEffect(() => {
-    if (!db) return;
-    if (!user) return;
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 2000; // 2 seconds
-    let retryTimers = [];
-
-    const onRealtimeError = (collection, err) => {
-      // Log error only in development
-      if (import.meta.env.DEV) {
-        console.error(`Realtime listener error for ${collection}:`, err);
-      }
-      
-      // Only retry on specific recoverable errors
-      const isRecoverable = err.code === 'permission-denied' || 
-                           err.code === 'unavailable' ||
-                           err.code === 'unauthenticated';
-      
-      if (isRecoverable && retryCount < maxRetries) {
-        retryCount++;
-        if (import.meta.env.DEV) {
-          console.warn(`Retrying ${collection} (attempt ${retryCount}/${maxRetries})...`);
-        }
-        const timer = setTimeout(() => {
-          // Reinitialize listeners
-          setupListeners();
-        }, retryDelay * retryCount);
-        retryTimers.push(timer);
-      } else {
-        setNotification({
-          message: lang === 'ar' 
-            ? `تعذر مزامنة البيانات${retryCount >= maxRetries ? ' - تم استنفاد محاولات إعادة المحاولة' : ''}, تحقق من الصلاحيات أو الاتصال`
-            : `Failed to sync data${retryCount >= maxRetries ? ' - retry limit exceeded' : ''}, check permissions or network`,
-          type: 'error'
-        });
-      }
+    if (!db || !user) return;
+    let active = true;
+    const syncedCollections = new Set();
+    const markSynced = (key) => {
+      if (!active) return;
+      syncedCollections.add(key);
+      setSyncState((prev) => ({ ...prev, [key]: true }));
+      if (syncedCollections.size === 4) setNotification((current) => current?.type === 'error' ? null : current);
     };
-
-    const setupListeners = () => {
-      setSyncState({ purchases: false, items: false, branches: false, vendors: false });
-      retryCount = 0;
-
-      const unP = onSnapshot(collection(db, 'purchases'), (s) => {
-        const normalized = s.docs
-          .map(d => ({ ...d.data(), id: d.id }))
-          .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
-        setPurchases(normalized);
-        setSyncState(prev => ({ ...prev, purchases: true }));
-        setNotification(null); // Clear error when successful
-      }, (err) => onRealtimeError('purchases', err));
-
-      const unI = onSnapshot(collection(db, 'items'), (s) => {
-        setItems(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, items: true }));
-      }, (err) => onRealtimeError('items', err));
-
-      const unB = onSnapshot(collection(db, 'branches'), (s) => {
-        setBranches(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, branches: true }));
-      }, (err) => onRealtimeError('branches', err));
-
-      const unV = onSnapshot(collection(db, 'vendors'), (s) => {
-        setVendors(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, vendors: true }));
-      }, (err) => onRealtimeError('vendors', err));
-
-      return () => {
-        unP(); 
-        unI(); 
-        unB(); 
-        unV();
-        retryTimers.forEach(timer => clearTimeout(timer));
-        retryTimers = [];
-      };
+    const onRealtimeError = (key, err) => {
+      if (!active) return;
+      syncedCollections.delete(key);
+      if (import.meta.env.DEV) console.error('Realtime listener error for ' + key + ':', err);
+      setSyncState((prev) => ({ ...prev, [key]: false }));
+      setNotification({
+        message: lang === 'ar'
+          ? 'تعذرت مزامنة بيانات ' + key + '. تحقق من صلاحيات قاعدة البيانات والاتصال ثم أعد تحميل الصفحة عند إصلاح المشكلة.'
+          : 'Could not sync ' + key + '. Check database permissions and connectivity, then reload after fixing the issue.',
+        type: 'error'
+      });
     };
-
-    const unsubscribe = setupListeners();
-    return unsubscribe;
+    const unsubscribePurchases = onSnapshot(collection(db, 'purchases'), (snapshot) => {
+      const normalized = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }))
+        .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
+      setPurchases(normalized);
+      markSynced('purchases');
+    }, (err) => onRealtimeError('purchases', err));
+    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+      setItems(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('items');
+    }, (err) => onRealtimeError('items', err));
+    const unsubscribeBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
+      setBranches(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('branches');
+    }, (err) => onRealtimeError('branches', err));
+    const unsubscribeVendors = onSnapshot(collection(db, 'vendors'), (snapshot) => {
+      setVendors(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('vendors');
+    }, (err) => onRealtimeError('vendors', err));
+    return () => {
+      active = false;
+      unsubscribePurchases();
+      unsubscribeItems();
+      unsubscribeBranches();
+      unsubscribeVendors();
+    };
   }, [user, lang]);
-
   const showMsg = useCallback((message, type = 'success', details = null) => {
     const duration = type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000;
     playUiSound(type === 'success' ? 'save' : 'error');
@@ -449,6 +417,12 @@ function App() {
     }
 
     if (isSeedingDemo) return;
+    if (replaceExisting) {
+      const confirmed = window.confirm(lang === 'ar'
+        ? 'تحذير: تحميل البيانات التجريبية سيحذف بيانات المشتريات والأصناف والموردين والفروع الحالية ويستبدلها ببيانات تجريبية. لا تتابع إذا كانت هذه بياناتك الفعلية. هل تريد المتابعة؟'
+        : 'Warning: loading demo data will delete current purchases, items, vendors, and branches and replace them with demo data. Do not continue if these are real records. Continue?');
+      if (!confirmed) return;
+    }
     setIsSeedingDemo(true);
     try {
       const clearCollection = async (name) => {
@@ -547,7 +521,7 @@ function App() {
       const mkDate = (offset) => {
         const d = new Date(today);
         d.setDate(today.getDate() + offset);
-        return d.toISOString().slice(0, 10);
+        return toLocalDateInputValue(d);
       };
 
       const b = (i) => demoBranches[i].name;
@@ -1456,14 +1430,13 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   );
 
   const sortedRecentAll = useMemo(() =>
-    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
+    [...enriched].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a)),
   [enriched]);
 
   const timeScopedOps = useMemo(() => {
     if (!sortedRecentAll.length) return [];
     const now = new Date();
     const nowTs = now.getTime();
-    const dayMs = 24 * 60 * 60 * 1000;
 
     if (timeFilter === 'realtime') {
       return sortedRecentAll;
@@ -1471,18 +1444,20 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const spanDays = timeFilter === 'weekly' ? 7 : 30;
-      const cutoff = nowTs - (spanDays * dayMs);
-      const list = sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
-      return list.length ? list : sortedRecentAll.slice(0, 20);
+      const cutoffDate = new Date(now);
+      cutoffDate.setHours(0, 0, 0, 0);
+      cutoffDate.setDate(cutoffDate.getDate() - (spanDays - 1));
+      const cutoff = cutoffDate.getTime();
+      return sortedRecentAll.filter((p) => getInvoiceTimestamp(p) >= cutoff);
     }
 
     const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
     const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : nowTs;
     const list = sortedRecentAll.filter((p) => {
-      const ts = getRecordTimestamp(p);
+      const ts = getInvoiceTimestamp(p);
       return ts >= fromTs && ts <= toTs;
     });
-    return list.length ? list : sortedRecentAll.slice(0, 20);
+    return list;
   }, [sortedRecentAll, timeFilter, customFrom, customTo]);
 
   const decisionBasisText = useMemo(() => {
@@ -1533,7 +1508,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const currentItemPrices = useMemo(() => {
     if (focusMode !== 'item' || !selectedValue) return [];
     return [...filteredOps]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .map((p) => cleanPriceValue(p.price))
       .filter((v) => v !== null);
   }, [filteredOps, focusMode, selectedValue]);
@@ -1583,7 +1558,8 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   }, [currentItemPrices, filteredOps, ar]);
 
   const supplierRecommendations = useMemo(() => {
-    if (!filteredOps.length) return [];
+    // Unit prices across different items are not comparable; only rank vendors for one selected item.
+    if (!filteredOps.length || focusMode !== 'item' || !selectedValue) return [];
 
     const grouped = {};
     filteredOps.forEach((p) => {
@@ -1592,7 +1568,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       if (!grouped[p.vendor]) grouped[p.vendor] = [];
       grouped[p.vendor].push({
         price,
-        timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0),
+        timestamp: getInvoiceTimestamp(p),
         name: p.name,
         code: p.code,
         branch: p.branch,
@@ -1657,21 +1633,16 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
         };
       })
       .filter(Boolean)
-      .sort((a, b) => a.rankScore - b.rankScore)
-      .slice(0, 5);
-  }, [filteredOps, itemAveragePrice, ar]);
+      .sort((a, b) => a.rankScore - b.rankScore);
+  }, [filteredOps, itemAveragePrice, ar, focusMode, selectedValue]);
 
   const supplierComparisonScopeText = useMemo(() => {
     if (focusMode === 'item' && selectedValue) {
       return ar ? `المقارنة لهذا الصنف فقط: ${selectedFocusEntity}` : `Comparison for this item only: ${selectedFocusEntity}`;
     }
-    if (focusMode === 'branch' && selectedValue) {
-      return ar ? `المقارنة لكل أصناف الفرع: ${selectedFocusEntity}` : `Comparison for all items in branch: ${selectedFocusEntity}`;
-    }
-    if (focusMode === 'supplier' && selectedValue) {
-      return ar ? 'هذا العرض يوضح أداء المورد المحدد عبر الأصناف داخل الفترة.' : 'This view shows the selected supplier performance across items in the period.';
-    }
-    return ar ? 'هذه الأرقام تمثل متوسط المورد عبر جميع الأصناف داخل الفلتر الحالي، وليست سعر صنف واحد.' : 'These numbers show the supplier average across all items in the current filter, not a single item price.';
+    return ar
+      ? 'اختر صنفًا محددًا لمقارنة الموردين بعدالة؛ متوسط أسعار أصناف مختلفة لا يصلح للمقارنة المباشرة.'
+      : 'Select one item to compare suppliers fairly; average prices across different items are not directly comparable.';
   }, [focusMode, selectedValue, selectedFocusEntity, ar]);
 
   const savingsByPurchaseId = useMemo(() => {
@@ -1681,19 +1652,23 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const resolvedSavings = new Map();
 
     [...sortedRecentAll]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .forEach((purchase) => {
         const code = String(purchase.code || '').trim();
         const price = cleanPriceValue(purchase.price);
-        const qty = Number(purchase.qty) || 1;
-
         if (!purchase.id || !code || price === null) return;
 
         const history = historyByCode.get(code) || [];
+        const qty = getSafePurchaseQuantity(purchase);
         let savings = 0;
 
-        if (history.length >= 2) {
-          const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
+        if (qty <= 0) {
+          savings = 0;
+        } else if (history.length >= 2) {
+          const baselinePrices = filterOutliers(history);
+          const baseline = baselinePrices.length
+            ? baselinePrices.reduce((sum, value) => sum + value, 0) / baselinePrices.length
+            : 0;
           if (baseline > price) savings = (baseline - price) * qty;
         } else {
           const impact = Number(purchase.impact);
@@ -1805,7 +1780,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const supplierSummary = useMemo(() => {
     if (!supplierRecommendations.length) return { best: null, worst: null };
     const best = supplierRecommendations[0];
-    const worst = [...supplierRecommendations].sort((a, b) => Number(b.last) - Number(a.last))[0] || null;
+    const worst = [...supplierRecommendations].sort((a, b) => Number(b.avg) - Number(a.avg))[0] || null;
     return { best, worst };
   }, [supplierRecommendations]);
 
@@ -1837,7 +1812,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       );
     }
     if (best && worst && best.vendor !== worst.vendor) {
-      const supplierGap = Math.max(0, Number(worst.last || 0) - Number(best.last || 0));
+      const supplierGap = Math.max(0, Number(worst.avg || 0) - Number(best.avg || 0));
       lines.push(
         ar
           ? `فرق أفضل مورد: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
@@ -2080,7 +2055,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
 
       <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
         <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
@@ -2106,7 +2081,6 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{ar ? 'ملاحظات سريعة' : 'Quick notes'}</p>
               <p className="mt-2 text-sm font-semibold text-slate-800">{marketStatus.hint}</p>
-                  <p className="mt-2 text-xs font-medium text-slate-500">{supplierComparisonScopeText}</p>
               {actionAlerts.length > 0 ? (
                 <div className="mt-3 space-y-2">
                   {actionAlerts.map((note, index) => (
@@ -2383,15 +2357,11 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'متوسط الفترة' : 'Period average'}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-800">{formatSmartNumber(s.avg, 1)} {t('currency')}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{ar ? 'نطاق المقارنة' : 'Comparison scope'}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800 break-words">{supplierComparisonScopeText}</p>
-                    <p className="mt-1 text-[11px] font-medium text-slate-500">
-                      {ar
-                        ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
-                        : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
-                    </p>
-                  </div>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {ar
+                      ? `يغطي ${s.branchCount || 0} فرع و ${s.itemCount || 0} صنف`
+                      : `Covers ${s.branchCount || 0} branches and ${s.itemCount || 0} items`}
+                  </p>
                 </div>
                 <span className={`mt-3 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[10px] font-black break-words max-w-full ${!s.aboveAvg ? 'status-good' : 'status-high'}`}>
                   {!s.aboveAvg
@@ -2403,7 +2373,9 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
             ))}
             {supplierRecommendations.length === 0 && (
               <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-xs font-bold text-slate-500">
-                {ar ? 'تظهر التوصيات بعد توفر بيانات كافية داخل الفلتر الحالي' : 'Recommendations appear once enough data exists in the current filter'}
+                {focusMode === 'item' && !selectedValue
+                  ? (ar ? 'اختر صنفًا محددًا أولًا؛ مقارنة متوسط أسعار أصناف مختلفة قد تكون مضللة.' : 'Select a specific item first; comparing average prices across different items can be misleading.')
+                  : (ar ? 'لا توجد بيانات كافية لمقارنة الموردين لهذا الصنف ضمن الفترة المحددة.' : 'Not enough data to compare suppliers for this item in the selected period.')}
               </div>
             )}
           </div>
@@ -2542,7 +2514,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
 // ==========================================
 function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, settings }) {
   const [formData, setFormData] = useState({ 
-    date: new Date().toISOString().split('T')[0], code: '', price: '', qty: '1', vendor: '', branch: ''
+    date: toLocalDateInputValue(new Date()), code: '', price: '', qty: '1', vendor: '', branch: ''
   });
   const [loading, setLoading] = useState(false);
   const [managerApproved, setManagerApproved] = useState(false);
@@ -2569,11 +2541,13 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
 
   const itemPurchases = useMemo(() => {
     if (!formData.code) return EMPTY_LIST;
+    const enteredInvoiceEnd = formData.date ? new Date(formData.date + 'T23:59:59').getTime() : Infinity;
+    const safeInvoiceEnd = Number.isFinite(enteredInvoiceEnd) ? enteredInvoiceEnd : Infinity;
     return purchases
-      .filter(p => p.code === formData.code)
-      .map(p => ({ ...p, dateValue: getRecordTimestamp(p) }))
-      .sort((a, b) => a.dateValue - b.dateValue);
-  }, [purchases, formData.code]);
+      .filter((purchase) => purchase.code === formData.code && getInvoiceTimestamp(purchase) <= safeInvoiceEnd)
+      .map((purchase) => ({ ...purchase, dateValue: getInvoiceTimestamp(purchase) }))
+      .sort((a, b) => a.dateValue - b.dateValue || getRecordTimestamp(a) - getRecordTimestamp(b));
+  }, [purchases, formData.code, formData.date]);
 
   const currentPrice = Number(formData.price || 0);
   const qtyValue = Number(formData.qty || 0);
@@ -2625,10 +2599,13 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
     );
   }, [formData.price, formData.code, formData.branch, formData.vendor, itemPurchases, settings, selectedItem?.name, currentPrice]);
   const withTimeout = (promise, ms, timeoutMessage) => {
+    let timeoutId;
     return Promise.race([
       promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms))
-    ]);
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+      })
+    ]).finally(() => clearTimeout(timeoutId));
   };
 
   const handleSave = async (e) => {
@@ -2675,8 +2652,8 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
     try {
       const selectedItem = items.find(i => i.code === formData.code);
       const analysis = calculateDecisionScore(curP, itemPurchases, { ...settings, currentQuantity: qtyVal });
-      const fallbackGrade = analysis?.grade || 'C';
-      const fallbackDecision = getDecisionLabelByGrade(fallbackGrade);
+      const fallbackGrade = analysis?.grade ?? null;
+      const fallbackDecision = analysis?.grade ? getDecisionLabelByGrade(fallbackGrade) : null;
       const referenceAvg = analysis?.avgPrice || 0;
       const diff = referenceAvg > 0 ? (curP - referenceAvg) : 0;
       const approvalImpact = referenceAvg > 0 && diff > 0 ? diff * qtyVal : 0;
@@ -2722,7 +2699,7 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
         status: fallbackGrade,
         score: analysis?.score ?? null,
         grade: fallbackGrade,
-        decisionAr: analysis?.decisionAr ?? (fallbackDecision === 'Buy Now' ? 'اشتر الآن' : fallbackDecision === 'Monitor' ? 'راقب' : 'لا تشتر'),
+        decisionAr: analysis?.decisionAr ?? (fallbackDecision === 'Buy Now' ? 'اشتر الآن' : fallbackDecision === 'Monitor' ? 'راقب' : fallbackDecision ? 'لا تشتر' : null),
         decisionEn: analysis?.decisionEn ?? fallbackDecision,
         reasonAr: decisionReasonAr,
         reasonEn: decisionReasonEn,
@@ -2849,7 +2826,7 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
                 </div>
                 <div className="space-y-2">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Database size={14}/> {t('qty')}</label>
-                   <input type="number" required className={`input-field text-center ${inlineValidation.qtyError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.qty} onChange={e=>setFormField('qty', e.target.value)} />
+                   <input type="number" min="0.0001" step="any" required className={`input-field text-center ${inlineValidation.qtyError ? 'border-red-300 ring-1 ring-red-100' : ''}`} value={formData.qty} onChange={e=>setFormField('qty', e.target.value)} />
                    {inlineValidation.qtyError && (
                      <p className="text-[10px] font-black text-red-600">{inlineValidation.qtyError}</p>
                    )}
@@ -3116,16 +3093,16 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
         normalizeSearchValue(p.name).includes(normalizedQuery) ||
         normalizeSearchValue(p.code).includes(normalizedQuery)
       );
-    }).filter(p => {
+    }).filter((p) => {
       if (!fromDate && !toDate) return true;
-      const date = new Date(p.date).setHours(0,0,0,0);
-      const from = fromDate ? new Date(fromDate).setHours(0,0,0,0) : null;
-      const to = toDate ? new Date(toDate).setHours(0,0,0,0) : null;
-      if (from && date < from) return false;
-      if (to && date > to) return false;
+      // Filter by invoice date, not upload time; exclude malformed dates.
+      const invoiceDate = String(p.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) return false;
+      if (fromDate && invoiceDate < fromDate) return false;
+      if (toDate && invoiceDate > toDate) return false;
       return true;
     });
-    return [...list].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+    return [...list].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a));
   }, [enriched, search, fromDate, toDate]);
 
   const clearFilters = useCallback(() => {
@@ -3141,11 +3118,7 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   }), [filtered, settings.gradeC]);
 
   const filteredTotalValue = useMemo(
-    () => filtered.reduce((sum, p) => {
-      const fallbackTotal = Number(p.price || 0) * Number(p.qty || 0);
-      const resolvedTotal = p.total ?? fallbackTotal;
-      return sum + Number(resolvedTotal || 0);
-    }, 0),
+    () => filtered.reduce((sum, p) => sum + getSafePurchaseTotal(p), 0),
     [filtered]
   );
 
@@ -3165,9 +3138,18 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   const latestRecordDate = filtered[0]?.date ? formatDateDisplay(filtered[0].date) : '—';
 
   const exportExcel = () => {
-    const header = `Date,Branch,Vendor,Item,Code,Price,Qty,Total,Score,Grade,Decision,Cause,Recommendation\n`;
-    const rows = filtered.map(p => `${p.date},${p.branch},${p.vendor},${p.name},${p.code},${p.price},${p.qty},${p.total},${p.score ?? ''},${p.grade ?? p.status ?? ''},${ar ? (p.decisionAr ?? '') : (p.decisionEn ?? '')},${ar ? (p.causeAr ?? '') : (p.causeEn ?? '')},${ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')}`).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const csvCell = (value) => {
+      let text = value == null ? '' : String(value);
+      if (typeof value === 'string' && /^[\t\r ]*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    const columns = ['Date', 'Branch', 'Vendor', 'Item', 'Code', 'Price', 'Qty', 'Total', 'Score', 'Grade', 'Decision', 'Cause', 'Recommendation'];
+    const header = columns.map((value) => csvCell(value)).join(',') + '\n';
+    const rows = filtered.map((p) => {
+      const values = [p.date, p.branch, p.vendor, p.name, p.code, p.price, p.qty, getSafePurchaseTotal(p), p.score ?? '', p.grade ?? p.status ?? '', ar ? (p.decisionAr ?? '') : (p.decisionEn ?? ''), ar ? (p.causeAr ?? '') : (p.causeEn ?? ''), ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')];
+      return values.map(csvCell).join(',');
+    }).join('\n');
+    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.setAttribute("download", "purchase_log.csv");
@@ -3244,19 +3226,22 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   }, [ar, clearDeleteBackup, deleteBackup, isRestoringDeleted, purchases.length, showMsg]);
 
   // Build deal analysis for selected item
+  const selectedDealHistory = useMemo(() => {
+    if (!selectedDeal) return EMPTY_LIST;
+    return purchases
+      .filter((purchase) => purchase.code === selectedDeal.code && purchase.id !== selectedDeal.id && comparePurchaseChronology(purchase, selectedDeal) < 0)
+      .sort(comparePurchaseChronology);
+  }, [selectedDeal, purchases]);
+
   const dealAnalysis = useMemo(() => {
     if (!selectedDeal) return null;
-    const history = purchases
-      .filter(p => p.code === selectedDeal.code && p.id !== selectedDeal.id)
-      .map(p => ({ price: p.price }));
-    return calculateDecisionScore(selectedDeal.price, history, settings);
-  }, [selectedDeal, purchases, settings]);
+    return calculateDecisionScore(selectedDeal.price, selectedDealHistory, settings);
+  }, [selectedDeal, selectedDealHistory, settings]);
 
   const dealRootCause = useMemo(() => {
     if (!selectedDeal) return null;
-    const history = purchases.filter(p => p.code === selectedDeal.code && p.id !== selectedDeal.id);
-    return calculateRootCause(selectedDeal, history, settings);
-  }, [selectedDeal, purchases, settings]);
+    return calculateRootCause(selectedDeal, selectedDealHistory, settings);
+  }, [selectedDeal, selectedDealHistory, settings]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 animate-in fade-in duration-700">
@@ -3463,11 +3448,11 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase">{t('qty')}</p>
-                    <p className="mt-0.5 text-xs font-black text-slate-800">{formatSmartNumber(p.qty, 0)}</p>
+                    <p className="mt-0.5 text-xs font-black text-slate-800">{formatSmartNumber(p.qty, 3)}</p>
                   </div>
                   <div className="bg-slate-50 rounded-lg p-2 border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase">{ar ? 'الإجمالي' : 'Total'}</p>
-                    <p className="mt-0.5 text-xs font-black text-slate-800 break-all">{formatSmartNumber(p.total ?? (Number(p.price || 0) * Number(p.qty || 0)), 2)} SAR</p>
+                    <p className="mt-0.5 text-xs font-black text-slate-800 break-all">{formatSmartNumber(getSafePurchaseTotal(p), 2)} SAR</p>
                   </div>
                 </div>
 
@@ -3765,7 +3750,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   );
 
   const sortedAll = useMemo(() =>
-    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
+    [...enriched].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a)),
   [enriched]);
 
   const itemOptions = useMemo(() => {
@@ -3777,11 +3762,11 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           code: p.code,
           name: p.name || p.code,
           count: 0,
-          lastTime: getRecordTimestamp(p),
+          lastTime: getInvoiceTimestamp(p),
         };
       }
       byCode[p.code].count += 1;
-      const currentTs = getRecordTimestamp(p);
+      const currentTs = getInvoiceTimestamp(p);
       if (currentTs > byCode[p.code].lastTime) {
         byCode[p.code].lastTime = currentTs;
         byCode[p.code].name = p.name || byCode[p.code].name;
@@ -3815,20 +3800,22 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     }
 
     const now = new Date().getTime();
-    const dayMs = 24 * 60 * 60 * 1000;
 
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const days = timeFilter === 'weekly' ? 7 : 30;
-      const cutoff = now - (days * dayMs);
+      const cutoffDate = new Date();
+      cutoffDate.setHours(0, 0, 0, 0);
+      cutoffDate.setDate(cutoffDate.getDate() - (days - 1));
+      const cutoff = cutoffDate.getTime();
       return sortedAll
-        .filter((p) => getRecordTimestamp(p) >= cutoff)
+        .filter((p) => getInvoiceTimestamp(p) >= cutoff)
         .slice(0, MAX_ANALYTICS_HISTORY_ROWS);
     }
 
     const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
     const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : now;
     return sortedAll.filter((p) => {
-      const ts = getRecordTimestamp(p);
+      const ts = getInvoiceTimestamp(p);
       return ts >= fromTs && ts <= toTs;
     }).slice(0, MAX_ANALYTICS_HISTORY_ROWS);
   }, [sortedAll, timeFilter, customFrom, customTo, MAX_ANALYTICS_HISTORY_ROWS]);
@@ -3866,16 +3853,18 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   }, [selectedItem, selectedItemCode, timeFilter, customFrom, customTo, selectedBranch, ar]);
 
   const trendData = useMemo(() => {
+    // A price line must represent one item; comparing different items' unit prices is misleading.
+    if (selectedItemCode === 'all') return [];
     const ordered = [...selectedItemOps]
       .map((p) => {
         const price = cleanPriceValue(p.price);
-        const dateValue = getRecordTimestamp(p);
+        const dateValue = getInvoiceTimestamp(p);
         return price !== null ? { ...p, price, dateValue } : null;
       })
       .filter(p => p !== null)
-      .sort((a, b) => a.dateValue - b.dateValue);
+      .sort((a, b) => a.dateValue - b.dateValue || getRecordTimestamp(a) - getRecordTimestamp(b));
 
-    const limited = timeFilter === 'realtime' ? ordered : ordered.slice(-12);
+    const limited = timeFilter === 'realtime' ? ordered.slice(-30) : ordered.slice(-12);
     if (limited.length < 3) return [];
 
     return limited.map((p, idx) => ({
@@ -3894,7 +3883,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       fullDate: p.date || (ar ? 'بدون تاريخ' : 'No date'),
       price: p.price,
     }));
-  }, [selectedItemOps, ar, timeFilter, isPhone]);
+  }, [selectedItemOps, selectedItemCode, ar, timeFilter, isPhone]);
 
   const trendChartWidth = useMemo(() => {
     if (timeFilter !== 'realtime') return null;
@@ -3923,7 +3912,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const itemImpactData = useMemo(() => {
     const byItem = {};
     [...scopedByBranch]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .forEach((p) => {
         const price = cleanPriceValue(p.price);
         if (!p.code || price === null) return;
@@ -3972,7 +3961,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
       .sort((a, b) => b.totalSpend - a.totalSpend)
       .slice(0, isPhone ? 5 : 8);
   }, [scopedByBranch, availableBranches, isPhone]);
-  const showTrendValueLabels = !isPhone || trendData.length <= 6;
+  const showTrendValueLabels = trendData.length <= (isPhone ? 6 : 12);
   const showSupplierValueLabels = !isPhone || supplierData.length <= 5;
   const showItemValueLabels = !isPhone || itemImpactData.length <= 5;
   const showBranchValueLabels = !isPhone || branchData.length <= 5;
@@ -4152,7 +4141,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
   const renderLeftAlignedAxisTick = useCallback((props) => {
     const { x, y, payload } = props || {};
-    const text = formatAxisName(payload?.value);
+    const fullText = formatAxisName(payload?.value);
+    if (!fullText) return null;
+    const maxChars = isPhone ? 16 : isTablet ? 20 : 24;
+    const text = fullText.length > maxChars ? fullText.slice(0, maxChars - 1).trimEnd() + '…' : fullText;
     if (!text) return null;
 
     const labelX = Number(x) - yAxisLabelWidth + 12;
@@ -4167,14 +4159,18 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         fontWeight={700}
         fill="#475569"
       >
+        <title>{fullText}</title>
         {text}
       </text>
     );
-  }, [formatAxisName, yAxisLabelWidth, isPhone]);
+  }, [formatAxisName, yAxisLabelWidth, isPhone, isTablet]);
 
   const renderSupplierAxisTick = useCallback((props) => {
     const { x, y, payload } = props || {};
-    const text = formatAxisName(payload?.value);
+    const fullText = formatAxisName(payload?.value);
+    if (!fullText) return null;
+    const maxChars = isPhone ? 16 : isTablet ? 20 : 24;
+    const text = fullText.length > maxChars ? fullText.slice(0, maxChars - 1).trimEnd() + '…' : fullText;
     if (!text) return null;
 
     const labelX = Number(x) - supplierYAxisLabelWidth + 12;
@@ -4189,10 +4185,11 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         fontWeight={700}
         fill="#475569"
       >
+        <title>{fullText}</title>
         {text}
       </text>
     );
-  }, [formatAxisName, supplierYAxisLabelWidth, isPhone]);
+  }, [formatAxisName, supplierYAxisLabelWidth, isPhone, isTablet]);
 
   const renderSupplierDiffLabel = (props) => {
     const { x, y, width, height, value } = props || {};
@@ -4300,10 +4297,15 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           </div>
         </div>
 
-        {selectedItemOps.length === 0 && (
+        {selectedItemCode === 'all' && (
+          <p className="text-sm font-semibold text-slate-500 text-center py-8">
+            {ar ? 'اختر صنفًا محددًا لعرض اتجاه سعره؛ جمع أسعار أصناف مختلفة في خط واحد قد يعطي مقارنة مضللة.' : 'Select one item to view its price trend; combining different items in one line can be misleading.'}
+          </p>
+        )}
+        {selectedItemCode !== 'all' && selectedItemOps.length === 0 && (
           <p className="text-sm font-black text-slate-400 text-center py-8">{ar ? 'لا توجد بيانات كافية في هذه الفترة' : 'Not enough data in this range'}</p>
         )}
-        {selectedItemOps.length > 0 && (
+        {selectedItemCode !== 'all' && selectedItemOps.length > 0 && (
           <>
             {!trendData.length && <p className="text-xs font-bold text-slate-500 mb-3">{ar ? 'البيانات غير كافية للعرض' : 'Not enough data to display'}</p>}
             {timeFilter === 'realtime' ? (
@@ -4312,7 +4314,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
                   <ResponsiveContainer width="100%" height={isPhone ? 216 : 244}>
                     <LineChart data={trendData} margin={{top: isPhone ? 14 : 18, right: isPhone ? 14 : 20, left: isPhone ? 10 : 14, bottom: isPhone ? 18 : 14}}>
                       <CartesianGrid strokeDasharray="3 3" stroke={analyticsPalette.grid}/>
-                      <XAxis dataKey="tickLabel" interval={0} tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} tickMargin={isPhone ? 10 : 8} minTickGap={isPhone ? 18 : 12}/>
+                      <XAxis dataKey="tickLabel" interval="preserveStartEnd" tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} tickMargin={isPhone ? 10 : 8} minTickGap={isPhone ? 18 : 12}/>
                       <YAxis tick={{fontSize:isPhone ? 10 : 11, fontWeight:700}} axisLine={false} tickLine={false} width={isPhone ? 56 : 64}/>
                       <RechartsTooltip
                         contentStyle={{borderRadius:'14px', border:'1px solid #dbe3ed', backgroundColor:'rgba(255,255,255,0.97)', padding:'10px 12px', boxShadow:'0 14px 30px rgba(28,42,61,0.10)'}}
@@ -4664,9 +4666,9 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
     return activeRecords.some((record) => normalizeMasterName(record.name) === normalizedCandidate && record.id !== excludeId);
   }, [activeRecords, normalizeMasterName]);
 
-  const weightSum = localSettings.priceWeight + localSettings.consistencyWeight + localSettings.trendWeight;
-  const weightsValid = weightSum === 100;
-  const thresholdsValid = localSettings.gradeA > localSettings.gradeB && localSettings.gradeB > localSettings.gradeC;
+  const weightSum = Number(localSettings.priceWeight) + Number(localSettings.consistencyWeight) + Number(localSettings.trendWeight);
+  const weightsValid = Number.isFinite(weightSum) && Math.abs(weightSum - 100) < 1e-6;
+  const thresholdsValid = Number(localSettings.gradeA) > Number(localSettings.gradeB) && Number(localSettings.gradeB) > Number(localSettings.gradeC);
 
   const handleSaveSettings = () => {
     if (!weightsValid || !thresholdsValid) return;
@@ -4691,6 +4693,10 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
         'warning',
         ar ? 'يوجد سجل بنفس الاسم بالفعل' : 'A record with the same name already exists'
       );
+      return;
+    }
+    if (tab === 'items' && String(price).trim() !== '' && (!Number.isFinite(Number(price)) || Number(price) <= 0)) {
+      showMsg(ar ? 'السعر المرجعي غير صالح' : 'Invalid reference price', 'warning', ar ? 'أدخل سعرًا موجبًا أو اترك الحقل فارغًا' : 'Enter a positive reference price or leave it blank');
       return;
     }
     try {
@@ -4742,6 +4748,10 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
         'warning',
         ar ? 'يوجد سجل آخر بنفس الاسم، اختر اسمًا مختلفًا' : 'Another record already uses this name'
       );
+      return;
+    }
+    if (tab === 'items' && String(editingPrice).trim() !== '' && (!Number.isFinite(Number(editingPrice)) || Number(editingPrice) <= 0)) {
+      showMsg(ar ? 'السعر المرجعي غير صالح' : 'Invalid reference price', 'warning', ar ? 'أدخل سعرًا موجبًا أو اترك الحقل فارغًا' : 'Enter a positive reference price or leave it blank');
       return;
     }
 
@@ -4902,7 +4912,7 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
               {ar ? 'إعدادات المخاطر' : 'Risk Settings'}
             </p>
-            <div className="grid grid-cols-1 tablet:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-3">
               <div className="bg-white border rounded-xl p-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('risky_threshold')}</p>
                 <input
@@ -4912,16 +4922,6 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
                   onChange={e => setLocalSettings(prev => ({ ...prev, riskyThreshold: Number(e.target.value) }))}
                 />
                 <p className="text-[10px] text-slate-400 mt-1 font-bold">{ar ? 'مثال: 0.10 = 10%' : 'Example: 0.10 = 10%'}</p>
-              </div>
-              <div className="bg-white border rounded-xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('bad_supplier_threshold')}</p>
-                <input
-                  type="number" min="-50" max="20" step="1"
-                  className="w-full input-field py-2 text-center font-black"
-                  value={localSettings.badSupplierThreshold}
-                  onChange={e => setLocalSettings(prev => ({ ...prev, badSupplierThreshold: Number(e.target.value) }))}
-                />
-                <p className="text-[10px] text-slate-400 mt-1 font-bold">{ar ? 'أي مورد أقل من هذا الحد يعتبر خطير' : 'Vendors below this average are flagged risky'}</p>
               </div>
               <div className="bg-white border rounded-xl p-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('sensitivity')}</p>
@@ -4973,7 +4973,7 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
             {tab==='items' && (
               <>
                 <input type="text" placeholder="Code" className="input-field flex-1 bg-slate-50 text-slate-500" value={nextItemCode} readOnly />
-                <input type="number" placeholder={t('ref_price')} className="input-field flex-1" value={price} onChange={e=>setPrice(e.target.value)} />
+                <input type="number" min="0.01" step="0.01" placeholder={t('ref_price')} className="input-field flex-1" value={price} onChange={e=>setPrice(e.target.value)} />
               </>
             )}
             <button onClick={handleAdd} className="btn-surface w-full tablet:w-auto px-6 tablet:px-10 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shrink-0 active:scale-95"><PlusCircle size={22}/> Add</button>
@@ -5005,6 +5005,8 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
                               />
                               <input
                                 type="number"
+                                min="0.01"
+                                step="0.01"
                                 className="input-field w-full"
                                 value={editingPrice}
                                 onChange={(e) => setEditingPrice(e.target.value)}

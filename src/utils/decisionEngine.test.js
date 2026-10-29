@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   calculateBaseMetrics,
+  calculateImpact,
   calculateDecisionScore,
   filterOutliers,
   getValidPrices,
@@ -20,11 +21,16 @@ describe('decisionEngine', () => {
       expect(filterOutliers([100, 102, 101, 260])).toEqual([100, 102, 101]);
     });
 
-    it('keeps at least the latest price when fallback filtering removes everything', () => {
-      expect(filterOutliers([1, 1, 1, 1000])).toEqual([1000]);
+    it('uses the median when MAD is zero so an isolated high outlier is removed', () => {
+      expect(filterOutliers([1, 1, 1, 1000])).toEqual([1, 1, 1]);
+    });
+
+    it('does not guess which of only two prices is an outlier', () => {
+      expect(filterOutliers([100, 1000])).toEqual([100, 1000]);
     });
 
     it('handles empty or very small arrays safely', () => {
+      expect(filterOutliers(null)).toEqual([]);
       expect(filterOutliers([])).toEqual([]);
       expect(filterOutliers([50])).toEqual([50]);
     });
@@ -49,6 +55,13 @@ describe('decisionEngine', () => {
       ];
 
       expect(getValidPrices(purchases)).toEqual([50]);
+    });
+  });
+
+  describe('calculateImpact', () => {
+    it('uses fractional quantities and rejects invalid quantities', () => {
+      expect(calculateImpact(110, 100, 0.5)).toBe(5);
+      expect(calculateImpact(110, 100, Number.NaN)).toBe(0);
     });
   });
 
@@ -108,6 +121,15 @@ describe('decisionEngine', () => {
       expect(result.score).toBe(37);
     });
 
+    it('does not round fractional quantity up for impact guardrails', () => {
+      const result = calculateDecisionScore(101, [
+        { price: 100, timestamp: 1 },
+        { price: 100, timestamp: 2 },
+        { price: 100, timestamp: 3 },
+      ], { currentQuantity: 0.5, maxBuyIncreaseAbs: 2, forceNoBuyIncreaseAbs: 2, forceNoBuyImpactAbs: 1 });
+      expect(result.grade).toBe('A');
+    });
+
     it('blocks purchases when the direct increase breaches safety guardrails', () => {
       const result = calculateDecisionScore(
         120,
@@ -156,6 +178,41 @@ describe('decisionEngine', () => {
   });
 
   describe('enrichPurchasesWithScores', () => {
+    it('clears legacy grade C and decision labels when history is insufficient', () => {
+      const [purchase] = enrichPurchasesWithScores([{
+        id: 'legacy',
+        code: 'A',
+        price: 100,
+        timestamp: 1,
+        score: null,
+        grade: 'C',
+        status: 'C',
+        decisionAr: 'لا تشتر',
+        decisionEn: 'Do Not Buy',
+      }], {});
+
+      expect(purchase.score).toBeNull();
+      expect(purchase.grade).toBeNull();
+      expect(purchase.status).toBeNull();
+      expect(purchase.decisionAr).toBeNull();
+      expect(purchase.decisionEn).toBeNull();
+    });
+
+    it('does not use future invoice dates when scoring a backdated purchase', () => {
+      const purchases = [
+        { id: 'old', code: 'A', price: 100, date: '2026-01-01', timestamp: 500 },
+        { id: 'future', code: 'A', price: 1000, date: '2026-02-01', timestamp: 400 },
+        { id: 'backdated', code: 'A', price: 110, date: '2026-01-15', timestamp: 600 },
+      ];
+
+      const enriched = enrichPurchasesWithScores(purchases, {});
+      const backdated = enriched.find((purchase) => purchase.id === 'backdated');
+
+      // Only the January 1 record is historical for this purchase; the February invoice is future data.
+      expect(backdated.score).toBeNull();
+      expect(backdated.grade).toBeNull();
+    });
+
     it('processes an array of purchases and attaches scores using historical contexts', () => {
       const purchases = [
         { id: 1, code: 'ITEM1', price: 100, timestamp: 1000 },

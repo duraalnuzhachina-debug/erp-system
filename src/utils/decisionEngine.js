@@ -14,19 +14,17 @@ export const DEFAULT_ENGINE_SETTINGS = {
   gradeB: 5,
   gradeC: -10,
   riskyThreshold: 0.10,
-  badSupplierThreshold: -5,
   sensitivity: 1,
   maxBuyIncreaseAbs: 1,
   forceNoBuyIncreaseAbs: 2,
   forceNoBuyImpactAbs: 200,
 };
 
-export const ROOT_CAUSE_MARKET_SIMILARITY = 0.03;
 export const OUTLIER_LOWER_BOUND = 0.5;  // 50% of average
 export const OUTLIER_UPPER_BOUND = 2.0;  // 200% of average
 export const MIN_VALID_RECORDS = 2;
 
-const getRecordTimestamp = (record, fallback = 0) => {
+export const getRecordTimestamp = (record, fallback = 0) => {
   if (!record || typeof record !== 'object') return fallback;
   const ts = Number(record.timestamp);
   if (Number.isFinite(ts) && ts > 0) return ts;
@@ -35,6 +33,20 @@ const getRecordTimestamp = (record, fallback = 0) => {
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
   return fallback;
+};
+
+export const getInvoiceTimestamp = (record, fallback = 0) => {
+  const invoiceDate = String(record?.date || '').trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
+    const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return getRecordTimestamp(record, fallback);
+};
+
+export const comparePurchaseChronology = (a, b) => {
+  const invoiceDifference = getInvoiceTimestamp(a, 0) - getInvoiceTimestamp(b, 0);
+  return invoiceDifference || getRecordTimestamp(a, 0) - getRecordTimestamp(b, 0);
 };
 
 const median = (arr) => {
@@ -89,42 +101,43 @@ export const cleanPriceValue = (value) => {
 };
 
 export const filterOutliers = (prices) => {
-  if (prices.length < MIN_VALID_RECORDS) return prices;
+  // With only two observations there is no defensible way to identify which one is an outlier.
+  if (!Array.isArray(prices)) return [];
+  if (prices.length < 3) return prices;
 
-  // Robust filter using median + MAD to resist skew from extreme values.
-  if (prices.length >= 4) {
-    const med = median(prices);
-    const deviations = prices.map((p) => Math.abs(p - med));
-    const mad = median(deviations);
-    if (mad > 1e-6) {
-      const sigma = 1.4826 * mad;
-      const low = med - (3 * sigma);
-      const high = med + (3 * sigma);
-      const robustFiltered = prices.filter((p) => p >= low && p <= high);
-      if (robustFiltered.length >= MIN_VALID_RECORDS) return robustFiltered;
-    }
+  const med = median(prices);
+  const deviations = prices.map((p) => Math.abs(p - med));
+  const mad = median(deviations);
+
+  if (mad > 1e-6) {
+    const sigma = 1.4826 * mad;
+    const low = med - (3 * sigma);
+    const high = med + (3 * sigma);
+    const robustFiltered = prices.filter((p) => p >= low && p <= high);
+    if (robustFiltered.length >= MIN_VALID_RECORDS) return robustFiltered;
+    return prices;
   }
 
-  const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
-  if (avg <= 0) return prices;
-  const filtered = prices.filter(
-    (p) => p >= OUTLIER_LOWER_BOUND * avg && p <= OUTLIER_UPPER_BOUND * avg
-  );
-  // ✅ ضمان بقاء نقطة واحدة على الأقل - إذا لم يبقَ شيء، أرجع آخر نقطة (الأحدث)
-  return filtered.length > 0 ? filtered : [prices[prices.length - 1]];
+  // When MAD is zero, anchor the fallback to the median—not the mean, which an extreme
+  // value can drag toward itself (e.g. [1, 1, 1, 1000]).
+  const low = med * OUTLIER_LOWER_BOUND;
+  const high = med * OUTLIER_UPPER_BOUND;
+  const filtered = prices.filter((p) => p >= low && p <= high);
+  return filtered.length >= MIN_VALID_RECORDS ? filtered : prices;
 };
 
 export const getValidPrices = (purchases, maxRecords = 10) => {
   if (!purchases || !Array.isArray(purchases)) return [];
   const normalized = purchases
     .map((p, idx) => {
-      if (typeof p === 'number') return { price: p, ts: idx + 1 };
+      if (typeof p === 'number') return { price: p, ts: idx + 1, record: null };
       return {
         price: p?.price,
         ts: getRecordTimestamp(p, idx + 1),
+        record: p,
       };
     })
-    .sort((a, b) => a.ts - b.ts);
+    .sort((a, b) => a.record && b.record ? comparePurchaseChronology(a.record, b.record) : a.ts - b.ts);
 
   return normalized
     .slice(-maxRecords)
@@ -149,6 +162,7 @@ export const calculateBaseMetrics = (currentPrice, historicalPurchases) => {
       change_percent: 0,
       trend_percent: 0,
       trend_direction: 'stable',
+      sample_count: validPrices.length,
     };
   }
 
@@ -184,8 +198,9 @@ export const calculateBaseMetrics = (currentPrice, historicalPurchases) => {
 export const calculateImpact = (currentPrice, averagePrice, quantity = 1) => {
   const cur = cleanPriceValue(currentPrice);
   const avg = cleanPriceValue(averagePrice);
-  if (cur === null || avg === null || quantity <= 0) return 0;
-  return (cur - avg) * quantity;
+  const qty = toFiniteNumber(quantity, NaN);
+  if (cur === null || avg === null || !Number.isFinite(qty) || qty <= 0) return 0;
+  return (cur - avg) * qty;
 };
 
 // ==========================================
@@ -254,7 +269,7 @@ export function calculateDecisionScore(currentPrice, historicalPurchases, settin
   }
 
   const absoluteIncrease = Math.max(0, toFiniteNumber(current_price, 0) - toFiniteNumber(avg_price, 0));
-  const quantity = Math.max(1, toFiniteNumber(currentQuantity, 1));
+  const quantity = Math.max(0, toFiniteNumber(currentQuantity, 1));
   const extraImpact = absoluteIncrease * quantity;
 
   // Guardrails for procurement safety: small increase blocks Buy, bigger increase blocks purchase.
@@ -551,9 +566,9 @@ export function enrichPurchasesWithScores(purchases, settings) {
   return purchases.map((p) => {
     if (p.score != null && p.grade) return p;
 
-    const currentTs = getRecordTimestamp(p, 0);
     const history = (byCode[p.code] || [])
-      .filter((h) => h.id !== p.id && getRecordTimestamp(h, 0) < currentTs)
+      .filter((h) => h.id !== p.id && comparePurchaseChronology(h, p) < 0)
+      .sort(comparePurchaseChronology)
       .map((h) => ({ price: h.price, timestamp: h.timestamp, date: h.date }));
 
     const analysis = calculateDecisionScore(p.price, history, settings);
@@ -574,6 +589,7 @@ const fallbackAvg = filteredHistory.length > 0
   ...p,
   score: analysis.score,
   grade: analysis.grade,
+  status: analysis.grade,
   decisionAr: analysis.decisionAr,
   decisionEn: analysis.decisionEn,
   reasonAr:
@@ -594,7 +610,12 @@ const fallbackAvg = filteredHistory.length > 0
 : {
   ...p,
   score: null,
-  grade: p.status || null,
+  grade: null,
+  status: null,
+  decisionAr: null,
+  decisionEn: null,
+  reasonAr: null,
+  reasonEn: null,
   causeSource: p.causeSource ?? root?.source ?? null,
   recommendationAr:
     p.recommendationAr ??
