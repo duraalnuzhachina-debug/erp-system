@@ -173,6 +173,26 @@ describe('decisionEngine', () => {
   });
 
   describe('enrichPurchasesWithScores', () => {
+    it('clears legacy grade C and decision labels when history is insufficient', () => {
+      const [purchase] = enrichPurchasesWithScores([{
+        id: 'legacy',
+        code: 'A',
+        price: 100,
+        timestamp: 1,
+        score: null,
+        grade: 'C',
+        status: 'C',
+        decisionAr: 'لا تشتر',
+        decisionEn: 'Do Not Buy',
+      }], {});
+
+      expect(purchase.score).toBeNull();
+      expect(purchase.grade).toBeNull();
+      expect(purchase.status).toBeNull();
+      expect(purchase.decisionAr).toBeNull();
+      expect(purchase.decisionEn).toBeNull();
+    });
+
     it('does not use future invoice dates when scoring a backdated purchase', () => {
       const purchases = [
         { id: 'old', code: 'A', price: 100, date: '2026-01-01', timestamp: 500 },
