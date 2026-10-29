@@ -1472,8 +1472,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const spanDays = timeFilter === 'weekly' ? 7 : 30;
       const cutoff = nowTs - (spanDays * dayMs);
-      const list = sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
-      return list.length ? list : sortedRecentAll.slice(0, 20);
+      return sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
     }
 
     const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
@@ -1482,7 +1481,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       const ts = getRecordTimestamp(p);
       return ts >= fromTs && ts <= toTs;
     });
-    return list.length ? list : sortedRecentAll.slice(0, 20);
+    return list;
   }, [sortedRecentAll, timeFilter, customFrom, customTo]);
 
   const decisionBasisText = useMemo(() => {
@@ -2077,7 +2076,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
 
       <div className="elevated-card relative overflow-hidden p-4 phone:p-5 md:p-6 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,248,252,0.98))]">
         <div className="absolute inset-y-0 right-0 w-40 bg-[radial-gradient(circle_at_center,rgba(77,110,157,0.09),transparent_68%)] pointer-events-none"></div>
