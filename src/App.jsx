@@ -335,86 +335,53 @@ function App() {
 
   // جلب البيانات
   useEffect(() => {
-    if (!db) return;
-    if (!user) return;
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 2000; // 2 seconds
-    let retryTimers = [];
-
-    const onRealtimeError = (collection, err) => {
-      // Log error only in development
-      if (import.meta.env.DEV) {
-        console.error(`Realtime listener error for ${collection}:`, err);
-      }
-      
-      // Only retry on specific recoverable errors
-      const isRecoverable = err.code === 'permission-denied' || 
-                           err.code === 'unavailable' ||
-                           err.code === 'unauthenticated';
-      
-      if (isRecoverable && retryCount < maxRetries) {
-        retryCount++;
-        if (import.meta.env.DEV) {
-          console.warn(`Retrying ${collection} (attempt ${retryCount}/${maxRetries})...`);
-        }
-        const timer = setTimeout(() => {
-          // Reinitialize listeners
-          setupListeners();
-        }, retryDelay * retryCount);
-        retryTimers.push(timer);
-      } else {
-        setNotification({
-          message: lang === 'ar' 
-            ? `تعذر مزامنة البيانات${retryCount >= maxRetries ? ' - تم استنفاد محاولات إعادة المحاولة' : ''}, تحقق من الصلاحيات أو الاتصال`
-            : `Failed to sync data${retryCount >= maxRetries ? ' - retry limit exceeded' : ''}, check permissions or network`,
-          type: 'error'
-        });
-      }
+    if (!db || !user) return;
+    let active = true;
+    const syncedCollections = new Set();
+    const markSynced = (key) => {
+      if (!active) return;
+      syncedCollections.add(key);
+      setSyncState((prev) => ({ ...prev, [key]: true }));
+      if (syncedCollections.size === 4) setNotification((current) => current?.type === 'error' ? null : current);
     };
-
-    const setupListeners = () => {
-      setSyncState({ purchases: false, items: false, branches: false, vendors: false });
-      retryCount = 0;
-
-      const unP = onSnapshot(collection(db, 'purchases'), (s) => {
-        const normalized = s.docs
-          .map(d => ({ ...d.data(), id: d.id }))
-          .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
-        setPurchases(normalized);
-        setSyncState(prev => ({ ...prev, purchases: true }));
-        setNotification(null); // Clear error when successful
-      }, (err) => onRealtimeError('purchases', err));
-
-      const unI = onSnapshot(collection(db, 'items'), (s) => {
-        setItems(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, items: true }));
-      }, (err) => onRealtimeError('items', err));
-
-      const unB = onSnapshot(collection(db, 'branches'), (s) => {
-        setBranches(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, branches: true }));
-      }, (err) => onRealtimeError('branches', err));
-
-      const unV = onSnapshot(collection(db, 'vendors'), (s) => {
-        setVendors(s.docs.map(d => ({ ...d.data(), id: d.id })));
-        setSyncState(prev => ({ ...prev, vendors: true }));
-      }, (err) => onRealtimeError('vendors', err));
-
-      return () => {
-        unP(); 
-        unI(); 
-        unB(); 
-        unV();
-        retryTimers.forEach(timer => clearTimeout(timer));
-        retryTimers = [];
-      };
+    const onRealtimeError = (key, err) => {
+      if (!active) return;
+      if (import.meta.env.DEV) console.error('Realtime listener error for ' + key + ':', err);
+      setSyncState((prev) => ({ ...prev, [key]: false }));
+      setNotification({
+        message: lang === 'ar'
+          ? 'تعذرت مزامنة بيانات ' + key + '. تحقق من صلاحيات قاعدة البيانات والاتصال ثم أعد تحميل الصفحة عند إصلاح المشكلة.'
+          : 'Could not sync ' + key + '. Check database permissions and connectivity, then reload after fixing the issue.',
+        type: 'error'
+      });
     };
-
-    const unsubscribe = setupListeners();
-    return unsubscribe;
+    setSyncState({ purchases: false, items: false, branches: false, vendors: false });
+    const unsubscribePurchases = onSnapshot(collection(db, 'purchases'), (snapshot) => {
+      const normalized = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }))
+        .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
+      setPurchases(normalized);
+      markSynced('purchases');
+    }, (err) => onRealtimeError('purchases', err));
+    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+      setItems(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('items');
+    }, (err) => onRealtimeError('items', err));
+    const unsubscribeBranches = onSnapshot(collection(db, 'branches'), (snapshot) => {
+      setBranches(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('branches');
+    }, (err) => onRealtimeError('branches', err));
+    const unsubscribeVendors = onSnapshot(collection(db, 'vendors'), (snapshot) => {
+      setVendors(snapshot.docs.map((document) => ({ ...document.data(), id: document.id })));
+      markSynced('vendors');
+    }, (err) => onRealtimeError('vendors', err));
+    return () => {
+      active = false;
+      unsubscribePurchases();
+      unsubscribeItems();
+      unsubscribeBranches();
+      unsubscribeVendors();
+    };
   }, [user, lang]);
-
   const showMsg = useCallback((message, type = 'success', details = null) => {
     const duration = type === 'error' ? 5000 : type === 'warning' ? 4000 : 3000;
     playUiSound(type === 'success' ? 'save' : 'error');
@@ -449,6 +416,12 @@ function App() {
     }
 
     if (isSeedingDemo) return;
+    if (replaceExisting) {
+      const confirmed = window.confirm(lang === 'ar'
+        ? 'تحذير: تحميل البيانات التجريبية سيحذف بيانات المشتريات والأصناف والموردين والفروع الحالية ويستبدلها ببيانات تجريبية. لا تتابع إذا كانت هذه بياناتك الفعلية. هل تريد المتابعة؟'
+        : 'Warning: loading demo data will delete current purchases, items, vendors, and branches and replace them with demo data. Do not continue if these are real records. Continue?');
+      if (!confirmed) return;
+    }
     setIsSeedingDemo(true);
     try {
       const clearCollection = async (name) => {
@@ -2618,10 +2591,13 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
     );
   }, [formData.price, formData.code, formData.branch, formData.vendor, itemPurchases, settings, selectedItem?.name, currentPrice]);
   const withTimeout = (promise, ms, timeoutMessage) => {
+    let timeoutId;
     return Promise.race([
       promise,
-      new Promise((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms))
-    ]);
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+      })
+    ]).finally(() => clearTimeout(timeoutId));
   };
 
   const handleSave = async (e) => {
@@ -2668,8 +2644,8 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
     try {
       const selectedItem = items.find(i => i.code === formData.code);
       const analysis = calculateDecisionScore(curP, itemPurchases, { ...settings, currentQuantity: qtyVal });
-      const fallbackGrade = analysis?.grade || 'C';
-      const fallbackDecision = getDecisionLabelByGrade(fallbackGrade);
+      const fallbackGrade = analysis?.grade ?? null;
+      const fallbackDecision = analysis?.grade ? getDecisionLabelByGrade(fallbackGrade) : null;
       const referenceAvg = analysis?.avgPrice || 0;
       const diff = referenceAvg > 0 ? (curP - referenceAvg) : 0;
       const approvalImpact = referenceAvg > 0 && diff > 0 ? diff * qtyVal : 0;
@@ -2715,7 +2691,7 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
         status: fallbackGrade,
         score: analysis?.score ?? null,
         grade: fallbackGrade,
-        decisionAr: analysis?.decisionAr ?? (fallbackDecision === 'Buy Now' ? 'اشتر الآن' : fallbackDecision === 'Monitor' ? 'راقب' : 'لا تشتر'),
+        decisionAr: analysis?.decisionAr ?? (fallbackDecision === 'Buy Now' ? 'اشتر الآن' : fallbackDecision === 'Monitor' ? 'راقب' : fallbackDecision ? 'لا تشتر' : null),
         decisionEn: analysis?.decisionEn ?? fallbackDecision,
         reasonAr: decisionReasonAr,
         reasonEn: decisionReasonEn,
@@ -3109,13 +3085,13 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
         normalizeSearchValue(p.name).includes(normalizedQuery) ||
         normalizeSearchValue(p.code).includes(normalizedQuery)
       );
-    }).filter(p => {
+    }).filter((p) => {
       if (!fromDate && !toDate) return true;
-      const date = new Date(p.date).setHours(0,0,0,0);
-      const from = fromDate ? new Date(fromDate).setHours(0,0,0,0) : null;
-      const to = toDate ? new Date(toDate).setHours(0,0,0,0) : null;
-      if (from && date < from) return false;
-      if (to && date > to) return false;
+      // Filter by invoice date, not upload time; exclude malformed dates.
+      const invoiceDate = String(p.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) return false;
+      if (fromDate && invoiceDate < fromDate) return false;
+      if (toDate && invoiceDate > toDate) return false;
       return true;
     });
     return [...list].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
@@ -3158,9 +3134,19 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   const latestRecordDate = filtered[0]?.date ? formatDateDisplay(filtered[0].date) : '—';
 
   const exportExcel = () => {
-    const header = `Date,Branch,Vendor,Item,Code,Price,Qty,Total,Score,Grade,Decision,Cause,Recommendation\n`;
-    const rows = filtered.map(p => `${p.date},${p.branch},${p.vendor},${p.name},${p.code},${p.price},${p.qty},${p.total},${p.score ?? ''},${p.grade ?? p.status ?? ''},${ar ? (p.decisionAr ?? '') : (p.decisionEn ?? '')},${ar ? (p.causeAr ?? '') : (p.causeEn ?? '')},${ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')}`).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const csvCell = (value, protectFormula = false) => {
+      let text = value == null ? '' : String(value);
+      if (protectFormula && /^[\t\r ]*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    const columns = ['Date', 'Branch', 'Vendor', 'Item', 'Code', 'Price', 'Qty', 'Total', 'Score', 'Grade', 'Decision', 'Cause', 'Recommendation'];
+    const header = columns.map((value) => csvCell(value)).join(',') + '\n';
+    const textColumns = new Set([0, 1, 2, 3, 4, 10, 11, 12]);
+    const rows = filtered.map((p) => {
+      const values = [p.date, p.branch, p.vendor, p.name, p.code, p.price, p.qty, p.total, p.score ?? '', p.grade ?? p.status ?? '', ar ? (p.decisionAr ?? '') : (p.decisionEn ?? ''), ar ? (p.causeAr ?? '') : (p.causeEn ?? ''), ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')];
+      return values.map((value, index) => csvCell(value, textColumns.has(index))).join(',');
+    }).join('\n');
+    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.setAttribute("download", "purchase_log.csv");
@@ -4147,7 +4133,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
   const renderLeftAlignedAxisTick = useCallback((props) => {
     const { x, y, payload } = props || {};
-    const text = formatAxisName(payload?.value);
+    const fullText = formatAxisName(payload?.value);
+    if (!fullText) return null;
+    const maxChars = isPhone ? 16 : isTablet ? 20 : 24;
+    const text = fullText.length > maxChars ? fullText.slice(0, maxChars - 1).trimEnd() + '…' : fullText;
     if (!text) return null;
 
     const labelX = Number(x) - yAxisLabelWidth + 12;
@@ -4162,6 +4151,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         fontWeight={700}
         fill="#475569"
       >
+        <title>{fullText}</title>
         {text}
       </text>
     );
@@ -4169,7 +4159,10 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
   const renderSupplierAxisTick = useCallback((props) => {
     const { x, y, payload } = props || {};
-    const text = formatAxisName(payload?.value);
+    const fullText = formatAxisName(payload?.value);
+    if (!fullText) return null;
+    const maxChars = isPhone ? 16 : isTablet ? 20 : 24;
+    const text = fullText.length > maxChars ? fullText.slice(0, maxChars - 1).trimEnd() + '…' : fullText;
     if (!text) return null;
 
     const labelX = Number(x) - supplierYAxisLabelWidth + 12;
@@ -4184,6 +4177,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
         fontWeight={700}
         fill="#475569"
       >
+        <title>{fullText}</title>
         {text}
       </text>
     );
