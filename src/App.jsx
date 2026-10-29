@@ -94,6 +94,13 @@ const readPurchasesDeleteBackup = () => {
   }
 };
 
+const toLocalDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+};
+
 const getRecordTimestamp = (record) => {
   const ts = Number(record?.timestamp);
   if (Number.isFinite(ts) && ts > 0) return ts;
@@ -107,7 +114,7 @@ const getRecordTimestamp = (record) => {
 // Use invoice dates for reporting periods, with timestamps as a legacy fallback.
 const getInvoiceTimestamp = (record) => {
   const invoiceDate = String(record?.date || '').trim().slice(0, 10);
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(invoiceDate)) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
     const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
     if (Number.isFinite(parsed)) return parsed;
   }
@@ -172,11 +179,11 @@ const normalizeSearchValue = (value) => {
 
 function App() {
   const savedDashboardFilters = useMemo(() => readDashboardFilters(), []);
-  const defaultCustomTo = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const defaultCustomTo = useMemo(() => toLocalDateInputValue(new Date()), []);
   const defaultCustomFrom = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return toLocalDateInputValue(d);
   }, []);
   const [user, setUser] = useState(null);
   const [lang, setLang] = useState(() => {
@@ -2523,7 +2530,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
 // ==========================================
 function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, settings }) {
   const [formData, setFormData] = useState({ 
-    date: new Date().toISOString().split('T')[0], code: '', price: '', qty: '1', vendor: '', branch: ''
+    date: toLocalDateInputValue(new Date()), code: '', price: '', qty: '1', vendor: '', branch: ''
   });
   const [loading, setLoading] = useState(false);
   const [managerApproved, setManagerApproved] = useState(false);
