@@ -1450,7 +1450,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   );
 
   const sortedRecentAll = useMemo(() =>
-    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
+    [...enriched].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a)),
   [enriched]);
 
   const timeScopedOps = useMemo(() => {
@@ -1672,7 +1672,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const resolvedSavings = new Map();
 
     [...sortedRecentAll]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .forEach((purchase) => {
         const code = String(purchase.code || '').trim();
         const price = cleanPriceValue(purchase.price);
@@ -3116,7 +3116,7 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
       if (toDate && invoiceDate > toDate) return false;
       return true;
     });
-    return [...list].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+    return [...list].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a));
   }, [enriched, search, fromDate, toDate]);
 
   const clearFilters = useCallback(() => {
@@ -3762,7 +3762,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   );
 
   const sortedAll = useMemo(() =>
-    [...enriched].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a)),
+    [...enriched].sort((a, b) => getInvoiceTimestamp(b) - getInvoiceTimestamp(a) || getRecordTimestamp(b) - getRecordTimestamp(a)),
   [enriched]);
 
   const itemOptions = useMemo(() => {
@@ -3774,11 +3774,11 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
           code: p.code,
           name: p.name || p.code,
           count: 0,
-          lastTime: getRecordTimestamp(p),
+          lastTime: getInvoiceTimestamp(p),
         };
       }
       byCode[p.code].count += 1;
-      const currentTs = getRecordTimestamp(p);
+      const currentTs = getInvoiceTimestamp(p);
       if (currentTs > byCode[p.code].lastTime) {
         byCode[p.code].lastTime = currentTs;
         byCode[p.code].name = p.name || byCode[p.code].name;
