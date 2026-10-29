@@ -4720,6 +4720,10 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
       );
       return;
     }
+    if (tab === 'items' && String(price).trim() !== '' && (!Number.isFinite(Number(price)) || Number(price) <= 0)) {
+      showMsg(ar ? 'السعر المرجعي غير صالح' : 'Invalid reference price', 'warning', ar ? 'أدخل سعرًا موجبًا أو اترك الحقل فارغًا' : 'Enter a positive reference price or leave it blank');
+      return;
+    }
     try {
       let typeLabel = '';
       if (tab === 'items') {
@@ -4769,6 +4773,10 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
         'warning',
         ar ? 'يوجد سجل آخر بنفس الاسم، اختر اسمًا مختلفًا' : 'Another record already uses this name'
       );
+      return;
+    }
+    if (tab === 'items' && String(editingPrice).trim() !== '' && (!Number.isFinite(Number(editingPrice)) || Number(editingPrice) <= 0)) {
+      showMsg(ar ? 'السعر المرجعي غير صالح' : 'Invalid reference price', 'warning', ar ? 'أدخل سعرًا موجبًا أو اترك الحقل فارغًا' : 'Enter a positive reference price or leave it blank');
       return;
     }
 
