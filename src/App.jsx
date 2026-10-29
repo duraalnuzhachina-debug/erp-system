@@ -3162,17 +3162,16 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   const latestRecordDate = filtered[0]?.date ? formatDateDisplay(filtered[0].date) : '—';
 
   const exportExcel = () => {
-    const csvCell = (value, protectFormula = false) => {
+    const csvCell = (value) => {
       let text = value == null ? '' : String(value);
-      if (protectFormula && /^[\t\r ]*[=+@-]/.test(text)) text = "'" + text;
+      if (typeof value === 'string' && /^[\t\r ]*[=+@-]/.test(text)) text = "'" + text;
       return '"' + text.replace(/"/g, '""') + '"';
     };
     const columns = ['Date', 'Branch', 'Vendor', 'Item', 'Code', 'Price', 'Qty', 'Total', 'Score', 'Grade', 'Decision', 'Cause', 'Recommendation'];
     const header = columns.map((value) => csvCell(value)).join(',') + '\n';
-    const textColumns = new Set([0, 1, 2, 3, 4, 10, 11, 12]);
     const rows = filtered.map((p) => {
       const values = [p.date, p.branch, p.vendor, p.name, p.code, p.price, p.qty, getSafePurchaseTotal(p), p.score ?? '', p.grade ?? p.status ?? '', ar ? (p.decisionAr ?? '') : (p.decisionEn ?? ''), ar ? (p.causeAr ?? '') : (p.causeEn ?? ''), ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')];
-      return values.map((value, index) => csvCell(value, textColumns.has(index))).join(',');
+      return values.map(csvCell).join(',');
     }).join('\n');
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
