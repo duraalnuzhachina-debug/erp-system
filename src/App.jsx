@@ -4916,7 +4916,7 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
               {ar ? 'إعدادات المخاطر' : 'Risk Settings'}
             </p>
-            <div className="grid grid-cols-1 tablet:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 tablet:grid-cols-2 gap-3">
               <div className="bg-white border rounded-xl p-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('risky_threshold')}</p>
                 <input
