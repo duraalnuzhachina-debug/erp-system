@@ -44,8 +44,8 @@ const DataTable = ({
       if (bVal == null) return sortConfig.direction === 'asc' ? -1 : 1;
 
       // Numeric comparison also handles numeric strings such as stored prices/codes.
-      const aNum = typeof aVal === 'number' ? aVal : (typeof aVal === 'string' && aVal.trim() !== '' && /^[-+]?\\d+(?:\\.\\d+)?$/.test(aVal.trim()) ? Number(aVal) : NaN);
-      const bNum = typeof bVal === 'number' ? bVal : (typeof bVal === 'string' && bVal.trim() !== '' && /^[-+]?\\d+(?:\\.\\d+)?$/.test(bVal.trim()) ? Number(bVal) : NaN);
+      const aNum = typeof aVal === 'number' ? aVal : (typeof aVal === 'string' && aVal.trim() !== '' && /^[-+]?\d+(?:\.\d+)?$/.test(aVal.trim()) ? Number(aVal) : NaN);
+      const bNum = typeof bVal === 'number' ? bVal : (typeof bVal === 'string' && bVal.trim() !== '' && /^[-+]?\d+(?:\.\d+)?$/.test(bVal.trim()) ? Number(bVal) : NaN);
       if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
         return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
       }
