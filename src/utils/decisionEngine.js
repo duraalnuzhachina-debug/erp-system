@@ -590,6 +590,7 @@ const fallbackAvg = filteredHistory.length > 0
   ...p,
   score: analysis.score,
   grade: analysis.grade,
+  status: analysis.grade,
   decisionAr: analysis.decisionAr,
   decisionEn: analysis.decisionEn,
   reasonAr:
@@ -610,7 +611,12 @@ const fallbackAvg = filteredHistory.length > 0
 : {
   ...p,
   score: null,
-  grade: p.status || null,
+  grade: null,
+  status: null,
+  decisionAr: null,
+  decisionEn: null,
+  reasonAr: null,
+  reasonEn: null,
   causeSource: p.causeSource ?? root?.source ?? null,
   recommendationAr:
     p.recommendationAr ??
