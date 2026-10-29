@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from '../lucideIcons';
 
 /**
@@ -26,11 +26,6 @@ const DataTable = ({
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
   const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Math.floor(Number(pageSize)) : 10;
-
-  useEffect(() => {
-    const lastPage = Math.max(1, Math.ceil(data.length / safePageSize));
-    setCurrentPage((page) => Math.min(page, lastPage));
-  }, [data.length, safePageSize]);
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -63,13 +58,13 @@ const DataTable = ({
     return sorted;
   }, [data, sortConfig]);
 
-  // Paginate
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * safePageSize;
-    return sortedData.slice(start, start + safePageSize);
-  }, [sortedData, currentPage, safePageSize]);
-
+  // Clamp the visible page immediately when filters shrink the result set.
   const totalPages = Math.max(1, Math.ceil(sortedData.length / safePageSize));
+  const effectivePage = Math.min(currentPage, totalPages);
+  const paginatedData = useMemo(() => {
+    const start = (effectivePage - 1) * safePageSize;
+    return sortedData.slice(start, start + safePageSize);
+  }, [sortedData, effectivePage, safePageSize]);
 
   const handleSort = (key) => {
     setSortConfig((prev) => ({
@@ -213,20 +208,20 @@ const DataTable = ({
       {totalPages > 1 && (
         <div className="erp-toolbar flex items-center justify-between px-2.5 py-2.5 rounded-xl">
           <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(Math.max(1, effectivePage - 1))}
+            disabled={effectivePage === 1}
             className="p-2 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isRTL ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
 
           <span className="erp-subtle-chip">
-            {currentPage} / {totalPages}
+            {effectivePage} / {totalPages}
           </span>
 
           <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(Math.min(totalPages, effectivePage + 1))}
+            disabled={effectivePage === totalPages}
             className="p-2 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isRTL ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
