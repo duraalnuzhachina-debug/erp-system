@@ -39,6 +39,9 @@ import {
   getGradeStyle,
   getDecisionLabelByGrade,
   enrichPurchasesWithScores,
+  getRecordTimestamp,
+  getInvoiceTimestamp,
+  comparePurchaseChronology,
 } from './utils/decisionEngine';
 
 const MotionRef = motion;
@@ -99,31 +102,6 @@ const toLocalDateInputValue = (date) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return year + '-' + month + '-' + day;
-};
-
-const getRecordTimestamp = (record) => {
-  const ts = Number(record?.timestamp);
-  if (Number.isFinite(ts) && ts > 0) return ts;
-  if (record?.date) {
-    const parsed = new Date(record.date).getTime();
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-};
-
-// Use invoice dates for reporting periods, with timestamps as a legacy fallback.
-const getInvoiceTimestamp = (record) => {
-  const invoiceDate = String(record?.date || '').trim().slice(0, 10);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
-    const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return getRecordTimestamp(record);
-};
-
-const comparePurchaseChronology = (a, b) => {
-  const invoiceDifference = getInvoiceTimestamp(a) - getInvoiceTimestamp(b);
-  return invoiceDifference || getRecordTimestamp(a) - getRecordTimestamp(b);
 };
 
 const getSafePurchaseQuantity = (record) => {
