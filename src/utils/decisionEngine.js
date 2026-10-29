@@ -149,6 +149,7 @@ export const calculateBaseMetrics = (currentPrice, historicalPurchases) => {
       change_percent: 0,
       trend_percent: 0,
       trend_direction: 'stable',
+      sample_count: validPrices.length,
     };
   }
 
@@ -184,8 +185,9 @@ export const calculateBaseMetrics = (currentPrice, historicalPurchases) => {
 export const calculateImpact = (currentPrice, averagePrice, quantity = 1) => {
   const cur = cleanPriceValue(currentPrice);
   const avg = cleanPriceValue(averagePrice);
-  if (cur === null || avg === null || quantity <= 0) return 0;
-  return (cur - avg) * quantity;
+  const qty = toFiniteNumber(quantity, NaN);
+  if (cur === null || avg === null || !Number.isFinite(qty) || qty <= 0) return 0;
+  return (cur - avg) * qty;
 };
 
 // ==========================================
@@ -254,7 +256,7 @@ export function calculateDecisionScore(currentPrice, historicalPurchases, settin
   }
 
   const absoluteIncrease = Math.max(0, toFiniteNumber(current_price, 0) - toFiniteNumber(avg_price, 0));
-  const quantity = Math.max(1, toFiniteNumber(currentQuantity, 1));
+  const quantity = Math.max(0, toFiniteNumber(currentQuantity, 1));
   const extraImpact = absoluteIncrease * quantity;
 
   // Guardrails for procurement safety: small increase blocks Buy, bigger increase blocks purchase.
