@@ -36,6 +36,20 @@ const getRecordTimestamp = (record, fallback = 0) => {
   return fallback;
 };
 
+const getInvoiceTimestamp = (record, fallback = 0) => {
+  const invoiceDate = String(record?.date || '').trim().slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
+    const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return getRecordTimestamp(record, fallback);
+};
+
+const comparePurchaseChronology = (a, b) => {
+  const invoiceDifference = getInvoiceTimestamp(a, 0) - getInvoiceTimestamp(b, 0);
+  return invoiceDifference || getRecordTimestamp(a, 0) - getRecordTimestamp(b, 0);
+};
+
 const median = (arr) => {
   if (!arr.length) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
@@ -117,13 +131,14 @@ export const getValidPrices = (purchases, maxRecords = 10) => {
   if (!purchases || !Array.isArray(purchases)) return [];
   const normalized = purchases
     .map((p, idx) => {
-      if (typeof p === 'number') return { price: p, ts: idx + 1 };
+      if (typeof p === 'number') return { price: p, ts: idx + 1, record: null };
       return {
         price: p?.price,
         ts: getRecordTimestamp(p, idx + 1),
+        record: p,
       };
     })
-    .sort((a, b) => a.ts - b.ts);
+    .sort((a, b) => a.record && b.record ? comparePurchaseChronology(a.record, b.record) : a.ts - b.ts);
 
   return normalized
     .slice(-maxRecords)
@@ -552,9 +567,9 @@ export function enrichPurchasesWithScores(purchases, settings) {
   return purchases.map((p) => {
     if (p.score != null && p.grade) return p;
 
-    const currentTs = getRecordTimestamp(p, 0);
     const history = (byCode[p.code] || [])
-      .filter((h) => h.id !== p.id && getRecordTimestamp(h, 0) < currentTs)
+      .filter((h) => h.id !== p.id && comparePurchaseChronology(h, p) < 0)
+      .sort(comparePurchaseChronology)
       .map((h) => ({ price: h.price, timestamp: h.timestamp, date: h.date }));
 
     const analysis = calculateDecisionScore(p.price, history, settings);
