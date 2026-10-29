@@ -381,7 +381,6 @@ function App() {
         type: 'error'
       });
     };
-    setSyncState({ purchases: false, items: false, branches: false, vendors: false });
     const unsubscribePurchases = onSnapshot(collection(db, 'purchases'), (snapshot) => {
       const normalized = snapshot.docs.map((document) => ({ ...document.data(), id: document.id }))
         .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b));
