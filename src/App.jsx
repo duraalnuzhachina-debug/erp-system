@@ -1532,7 +1532,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const currentItemPrices = useMemo(() => {
     if (focusMode !== 'item' || !selectedValue) return [];
     return [...filteredOps]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .map((p) => cleanPriceValue(p.price))
       .filter((v) => v !== null);
   }, [filteredOps, focusMode, selectedValue]);
