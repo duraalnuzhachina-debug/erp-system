@@ -9,17 +9,16 @@ import {
 
 // الأيقونات
 import { 
-  ShoppingCart, Database, PlusCircle, TrendingUp, TrendingDown, Minus, Save, RotateCcw,
+  ShoppingCart, Database, PlusCircle, TrendingUp, TrendingDown, Save, RotateCcw,
   BarChart3, Search, CheckCircle, AlertCircle, ChevronDown,
-  Settings, Package, Store, MapPin, Trash2, Wallet, ArrowDownRight, ArrowUpRight, AlertTriangle,
-  PieChart, Award, ThumbsDown, Activity, FileText, Printer, X, CalendarDays, Download, Copy,
-  Languages, LogOut, LogIn, User, UserCircle, Filter, SlidersHorizontal, Info, Zap, Target,
-  TrendingUp as TrendUp, ShieldAlert, ChevronsLeft, ChevronsRight, Building2
+  Settings, Package, Store, MapPin, Trash2, Wallet, AlertTriangle,
+  PieChart, Award, Activity, FileText, X, CalendarDays, Download, Copy,
+  Languages, LogOut, LogIn, Filter, SlidersHorizontal, Info, Zap,
+  ChevronsLeft, ChevronsRight, Building2
 } from './lucideIcons';
 import { 
-  LineChart, AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Legend, LabelList,
-  PieChart as RechartsPie, Pie, Cell, ReferenceLine
+  LineChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer, LabelList, Cell
 } from 'recharts';
 import ErrorBoundary from './components/ErrorBoundary';
 import DataTable from './components/DataTable';
@@ -105,13 +104,27 @@ const getRecordTimestamp = (record) => {
   return 0;
 };
 
+// Use invoice dates for reporting periods, with timestamps as a legacy fallback.
+const getInvoiceTimestamp = (record) => {
+  const invoiceDate = String(record?.date || '').trim().slice(0, 10);
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(invoiceDate)) {
+    const parsed = new Date(invoiceDate + 'T12:00:00').getTime();
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return getRecordTimestamp(record);
+};
+
+const getSafePurchaseQuantity = (record) => {
+  if (record?.qty == null || String(record.qty).trim() === '') return 1;
+  const qty = Number(record.qty);
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
+};
+
 const getSafePurchaseTotal = (record) => {
   const storedTotal = Number(record?.total);
-  if (Number.isFinite(storedTotal)) return storedTotal;
-
+  if (record?.total != null && String(record.total).trim() !== '' && Number.isFinite(storedTotal) && storedTotal > 0) return storedTotal;
   const price = cleanPriceValue(record?.price);
-  const qty = Number(record?.qty) || 1;
-  return price !== null ? price * qty : 0;
+  return price !== null ? price * getSafePurchaseQuantity(record) : 0;
 };
 
 const getLocalizedDecisionLabel = (grade, ar) => {
@@ -1445,14 +1458,17 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const spanDays = timeFilter === 'weekly' ? 7 : 30;
-      const cutoff = nowTs - (spanDays * dayMs);
-      return sortedRecentAll.filter((p) => getRecordTimestamp(p) >= cutoff);
+      const cutoffDate = new Date(now);
+      cutoffDate.setHours(0, 0, 0, 0);
+      cutoffDate.setDate(cutoffDate.getDate() - (spanDays - 1));
+      const cutoff = cutoffDate.getTime();
+      return sortedRecentAll.filter((p) => getInvoiceTimestamp(p) >= cutoff);
     }
 
     const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
     const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : nowTs;
     const list = sortedRecentAll.filter((p) => {
-      const ts = getRecordTimestamp(p);
+      const ts = getInvoiceTimestamp(p);
       return ts >= fromTs && ts <= toTs;
     });
     return list;
@@ -1566,7 +1582,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       if (!grouped[p.vendor]) grouped[p.vendor] = [];
       grouped[p.vendor].push({
         price,
-        timestamp: p.timestamp || (p.date ? new Date(p.date).getTime() : 0),
+        timestamp: getInvoiceTimestamp(p),
         name: p.name,
         code: p.code,
         branch: p.branch,
@@ -1631,8 +1647,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
         };
       })
       .filter(Boolean)
-      .sort((a, b) => a.rankScore - b.rankScore)
-      .slice(0, 5);
+      .sort((a, b) => a.rankScore - b.rankScore);
   }, [filteredOps, itemAveragePrice, ar, focusMode, selectedValue]);
 
   const supplierComparisonScopeText = useMemo(() => {
@@ -1775,7 +1790,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const supplierSummary = useMemo(() => {
     if (!supplierRecommendations.length) return { best: null, worst: null };
     const best = supplierRecommendations[0];
-    const worst = [...supplierRecommendations].sort((a, b) => Number(b.last) - Number(a.last))[0] || null;
+    const worst = [...supplierRecommendations].sort((a, b) => Number(b.avg) - Number(a.avg))[0] || null;
     return { best, worst };
   }, [supplierRecommendations]);
 
@@ -1807,7 +1822,7 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
       );
     }
     if (best && worst && best.vendor !== worst.vendor) {
-      const supplierGap = Math.max(0, Number(worst.last || 0) - Number(best.last || 0));
+      const supplierGap = Math.max(0, Number(worst.avg || 0) - Number(best.avg || 0));
       lines.push(
         ar
           ? `فرق أفضل مورد: ${formatSmartNumber(supplierGap, 1)} ${t('currency')}`
@@ -2539,7 +2554,7 @@ function EntryFormView({ purchases, items, branches, vendors, showMsg, t, lang, 
     return purchases
       .filter(p => p.code === formData.code)
       .map(p => ({ ...p, dateValue: getRecordTimestamp(p) }))
-      .sort((a, b) => a.dateValue - b.dateValue);
+      .sort((a, b) => a.dateValue - b.dateValue || getRecordTimestamp(a) - getRecordTimestamp(b));
   }, [purchases, formData.code]);
 
   const currentPrice = Number(formData.price || 0);
@@ -3111,11 +3126,7 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
   }), [filtered, settings.gradeC]);
 
   const filteredTotalValue = useMemo(
-    () => filtered.reduce((sum, p) => {
-      const fallbackTotal = Number(p.price || 0) * Number(p.qty || 0);
-      const resolvedTotal = p.total ?? fallbackTotal;
-      return sum + Number(resolvedTotal || 0);
-    }, 0),
+    () => filtered.reduce((sum, p) => sum + getSafePurchaseTotal(p), 0),
     [filtered]
   );
 
@@ -3144,7 +3155,7 @@ function DatabaseView({ purchases, enrichedPurchases, isActive = true, showMsg, 
     const header = columns.map((value) => csvCell(value)).join(',') + '\n';
     const textColumns = new Set([0, 1, 2, 3, 4, 10, 11, 12]);
     const rows = filtered.map((p) => {
-      const values = [p.date, p.branch, p.vendor, p.name, p.code, p.price, p.qty, p.total, p.score ?? '', p.grade ?? p.status ?? '', ar ? (p.decisionAr ?? '') : (p.decisionEn ?? ''), ar ? (p.causeAr ?? '') : (p.causeEn ?? ''), ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')];
+      const values = [p.date, p.branch, p.vendor, p.name, p.code, p.price, p.qty, getSafePurchaseTotal(p), p.score ?? '', p.grade ?? p.status ?? '', ar ? (p.decisionAr ?? '') : (p.decisionEn ?? ''), ar ? (p.causeAr ?? '') : (p.causeEn ?? ''), ar ? (p.recommendationAr ?? '') : (p.recommendationEn ?? '')];
       return values.map((value, index) => csvCell(value, textColumns.has(index))).join(',');
     }).join('\n');
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
@@ -3799,16 +3810,19 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
 
     if (timeFilter === 'weekly' || timeFilter === 'monthly') {
       const days = timeFilter === 'weekly' ? 7 : 30;
-      const cutoff = now - (days * dayMs);
+      const cutoffDate = new Date();
+      cutoffDate.setHours(0, 0, 0, 0);
+      cutoffDate.setDate(cutoffDate.getDate() - (days - 1));
+      const cutoff = cutoffDate.getTime();
       return sortedAll
-        .filter((p) => getRecordTimestamp(p) >= cutoff)
+        .filter((p) => getInvoiceTimestamp(p) >= cutoff)
         .slice(0, MAX_ANALYTICS_HISTORY_ROWS);
     }
 
     const fromTs = customFrom ? new Date(`${customFrom}T00:00:00`).getTime() : 0;
     const toTs = customTo ? new Date(`${customTo}T23:59:59`).getTime() : now;
     return sortedAll.filter((p) => {
-      const ts = getRecordTimestamp(p);
+      const ts = getInvoiceTimestamp(p);
       return ts >= fromTs && ts <= toTs;
     }).slice(0, MAX_ANALYTICS_HISTORY_ROWS);
   }, [sortedAll, timeFilter, customFrom, customTo, MAX_ANALYTICS_HISTORY_ROWS]);
@@ -3851,11 +3865,11 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
     const ordered = [...selectedItemOps]
       .map((p) => {
         const price = cleanPriceValue(p.price);
-        const dateValue = getRecordTimestamp(p);
+        const dateValue = getInvoiceTimestamp(p);
         return price !== null ? { ...p, price, dateValue } : null;
       })
       .filter(p => p !== null)
-      .sort((a, b) => a.dateValue - b.dateValue);
+      .sort((a, b) => a.dateValue - b.dateValue || getRecordTimestamp(a) - getRecordTimestamp(b));
 
     const limited = timeFilter === 'realtime' ? ordered.slice(-30) : ordered.slice(-12);
     if (limited.length < 3) return [];
@@ -3905,7 +3919,7 @@ function AnalyticsView({ purchases, enrichedPurchases, isActive = true, t, lang,
   const itemImpactData = useMemo(() => {
     const byItem = {};
     [...scopedByBranch]
-      .sort((a, b) => getRecordTimestamp(a) - getRecordTimestamp(b))
+      .sort((a, b) => getInvoiceTimestamp(a) - getInvoiceTimestamp(b) || getRecordTimestamp(a) - getRecordTimestamp(b))
       .forEach((p) => {
         const price = cleanPriceValue(p.price);
         if (!p.code || price === null) return;
@@ -4659,9 +4673,9 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
     return activeRecords.some((record) => normalizeMasterName(record.name) === normalizedCandidate && record.id !== excludeId);
   }, [activeRecords, normalizeMasterName]);
 
-  const weightSum = localSettings.priceWeight + localSettings.consistencyWeight + localSettings.trendWeight;
-  const weightsValid = weightSum === 100;
-  const thresholdsValid = localSettings.gradeA > localSettings.gradeB && localSettings.gradeB > localSettings.gradeC;
+  const weightSum = Number(localSettings.priceWeight) + Number(localSettings.consistencyWeight) + Number(localSettings.trendWeight);
+  const weightsValid = Number.isFinite(weightSum) && Math.abs(weightSum - 100) < 1e-6;
+  const thresholdsValid = Number(localSettings.gradeA) > Number(localSettings.gradeB) && Number(localSettings.gradeB) > Number(localSettings.gradeC);
 
   const handleSaveSettings = () => {
     if (!weightsValid || !thresholdsValid) return;
