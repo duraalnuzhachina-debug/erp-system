@@ -545,7 +545,7 @@ function App() {
       const mkDate = (offset) => {
         const d = new Date(today);
         d.setDate(today.getDate() + offset);
-        return d.toISOString().slice(0, 10);
+        return toLocalDateInputValue(d);
       };
 
       const b = (i) => demoBranches[i].name;
