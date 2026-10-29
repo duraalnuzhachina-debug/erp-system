@@ -206,24 +206,11 @@ export function calculateDecisionScore(currentPrice, historicalPurchases, settin
   } = { ...DEFAULT_ENGINE_SETTINGS, ...settings };
 
   const metrics = calculateBaseMetrics(currentPrice, historicalPurchases);
-  if (!metrics || metrics.avg_price <= 0) {
-  return {
-    score: 0,
-    grade: 'C',
-    decisionAr: 'لا توجد بيانات كافية',
-    decisionEn: 'Insufficient data',
-    warnings: [],
-    reasons: [],
-    avgPrice: 0,
-    minPrice: 0,
-    maxPrice: 0,
-    lastPrice: 0,
-    priceDiff: 0,
-    trend: 0,
-    consistency: 0,
-    sampleCount: 0,
-  };
-}
+  // No decision should be inferred from missing or insufficient price history.
+  // Returning null lets the UI distinguish "unknown" from a real negative score.
+  if (!metrics || metrics.avg_price <= 0 || metrics.sample_count < MIN_VALID_RECORDS) {
+    return null;
+  }
 
   const { avg_price, current_price, change_percent, trend_percent } = metrics;
 
@@ -564,14 +551,9 @@ export function enrichPurchasesWithScores(purchases, settings) {
   return purchases.map((p) => {
     if (p.score != null && p.grade) return p;
 
-    const currentTs = Number.isFinite(new Date(p.date).getTime())
-  ? new Date(p.date).getTime()
-  : (p.timestamp || 0);
+    const currentTs = getRecordTimestamp(p, 0);
     const history = (byCode[p.code] || [])
-      .filter(
-        (h) =>
-          h.id !== p.id && (h.date ? new Date(h.date).getTime() : h.timestamp || 0) < currentTs
-      )
+      .filter((h) => h.id !== p.id && getRecordTimestamp(h, 0) < currentTs)
       .map((h) => ({ price: h.price, timestamp: h.timestamp, date: h.date }));
 
     const analysis = calculateDecisionScore(p.price, history, settings);
