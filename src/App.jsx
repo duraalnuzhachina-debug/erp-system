@@ -4928,16 +4928,6 @@ function MasterDataView({ items, branches, vendors, showMsg, t, lang, engineSett
                 <p className="text-[10px] text-slate-400 mt-1 font-bold">{ar ? 'مثال: 0.10 = 10%' : 'Example: 0.10 = 10%'}</p>
               </div>
               <div className="bg-white border rounded-xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('bad_supplier_threshold')}</p>
-                <input
-                  type="number" min="-50" max="20" step="1"
-                  className="w-full input-field py-2 text-center font-black"
-                  value={localSettings.badSupplierThreshold}
-                  onChange={e => setLocalSettings(prev => ({ ...prev, badSupplierThreshold: Number(e.target.value) }))}
-                />
-                <p className="text-[10px] text-slate-400 mt-1 font-bold">{ar ? 'أي مورد أقل من هذا الحد يعتبر خطير' : 'Vendors below this average are flagged risky'}</p>
-              </div>
-              <div className="bg-white border rounded-xl p-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('sensitivity')}</p>
                 <input
                   type="number" min="0.5" max="2" step="0.1"
