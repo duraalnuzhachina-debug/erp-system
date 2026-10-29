@@ -1686,7 +1686,9 @@ function DashboardView({ purchases, enrichedPurchases, isActive = true, t, lang,
         const qty = getSafePurchaseQuantity(purchase);
         let savings = 0;
 
-        if (qty > 0 && history.length >= 2) {
+        if (qty <= 0) {
+          savings = 0;
+        } else if (history.length >= 2) {
           const baselinePrices = filterOutliers(history);
           const baseline = baselinePrices.length
             ? baselinePrices.reduce((sum, value) => sum + value, 0) / baselinePrices.length
